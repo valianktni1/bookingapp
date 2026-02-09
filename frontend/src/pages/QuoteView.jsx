@@ -26,25 +26,34 @@ export default function QuoteView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // IMPORTANT: Start with empty array - client selects their own packages
   const [selectedPackages, setSelectedPackages] = useState([]);
   const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     fetchQuote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId]);
 
   const fetchQuote = async () => {
     try {
       const response = await axios.get(`${API}/public/quote/${quoteId}`);
       setData(response.data);
-      // Don't pre-select anything - let client choose their package
+      // CRITICAL: Clear any selections - client must choose their own package
+      // Do NOT pre-select anything
       setSelectedPackages([]);
+      console.log("Quote loaded - selectedPackages reset to empty array");
     } catch (err) {
       console.error("Error fetching quote:", err);
       setError("Quote not found or has expired");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Check if a package is selected
+  const isPackageSelected = (packageId) => {
+    return selectedPackages.includes(packageId);
   };
 
   const togglePackage = (packageId) => {
