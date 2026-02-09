@@ -346,6 +346,21 @@ def serialize_doc(doc):
         doc['created_at'] = datetime.fromisoformat(doc['created_at'].replace('Z', '+00:00'))
     if isinstance(doc.get('updated_at'), str):
         doc['updated_at'] = datetime.fromisoformat(doc['updated_at'].replace('Z', '+00:00'))
+    
+    # Handle quote items conversion
+    if 'items' in doc and isinstance(doc['items'], list):
+        for i, item in enumerate(doc['items']):
+            if isinstance(item, dict):
+                # Ensure all required fields exist with defaults
+                doc['items'][i] = {
+                    'package_id': item.get('package_id', ''),
+                    'name': item.get('name', ''),
+                    'description': item.get('description', ''),
+                    'price': item.get('price', 0.0),
+                    'package_type': item.get('package_type', 'main'),
+                    'quantity': item.get('quantity', 1)
+                }
+    
     return doc
 
 async def get_next_invoice_number():
