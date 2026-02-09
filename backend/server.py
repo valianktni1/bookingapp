@@ -397,8 +397,7 @@ def recalculate_invoice(invoice_data, settings):
     subtotal = sum(item['quantity'] * item['unit_price'] for item in invoice_data.get('line_items', []))
     discount = invoice_data.get('discount', 0)
     total = subtotal - discount
-    deposit_pct = invoice_data.get('deposit_percentage', settings.deposit_percentage)
-    deposit_amount = total * (deposit_pct / 100)
+    deposit_amount = invoice_data.get('deposit_amount', settings.deposit_amount)
     balance_amount = total - deposit_amount
     
     return {
