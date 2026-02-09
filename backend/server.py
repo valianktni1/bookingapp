@@ -575,7 +575,16 @@ async def send_quote(quote_data: QuoteSend):
 @api_router.get("/quotes", response_model=List[Quote])
 async def get_quotes():
     quotes = await db.quotes.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [Quote(**serialize_doc(q)) for q in quotes]
+    valid_quotes = []
+    for q in quotes:
+        try:
+            serialized = serialize_doc(q)
+            quote_obj = Quote(**serialized)
+            valid_quotes.append(quote_obj)
+        except Exception as e:
+            logger.warning(f"Skipping invalid quote {q.get('id', 'unknown')}: {str(e)}")
+            continue
+    return valid_quotes
 
 @api_router.get("/quotes/lead/{lead_id}", response_model=List[Quote])
 async def get_quotes_for_lead(lead_id: str):
