@@ -142,8 +142,9 @@ export default function QuoteView() {
               Hello {lead.partner1_name} & {lead.partner2_name}! 💍
             </h2>
             <p className="text-muted-foreground">
-              Thank you for considering me to capture your special day. Below is your personalised quote 
-              with all available packages. Please select your preferred options and accept to secure your booking.
+              Thank you for considering me to capture your special day. Below are all available packages 
+              for your wedding. Please <strong>select your preferred package</strong> and any optional add-ons, 
+              then click accept to secure your booking.
             </p>
             
             <div className="flex flex-wrap gap-4 mt-4 text-sm">
@@ -162,6 +163,14 @@ export default function QuoteView() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Package Selection Instructions */}
+        <div className="bg-gold/10 border border-gold/30 rounded-sm p-4 mb-6">
+          <p className="text-obsidian text-sm">
+            <strong>How to book:</strong> Select ONE main package below, add any optional extras you'd like, 
+            then click "Accept Quote & Book" at the bottom. Your booking will be confirmed once the £{data?.business?.deposit_amount || 100} deposit is received.
+          </p>
+        </div>
 
         {/* Packages */}
         <div className="space-y-6 mb-8">
