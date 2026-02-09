@@ -15,10 +15,12 @@ class WeddingCRMTester:
         
         # Store created IDs for cleanup and further testing
         self.created_lead_id = None
-        self.created_quote_template_id = None
+        self.created_main_package_id = None
+        self.created_addon_ids = []
         self.created_contract_template_id = None
         self.created_quote_id = None
         self.created_job_id = None
+        self.created_invoice_id = None
         self.portal_token = None
 
     def log_test(self, name, success, details="", error=""):
