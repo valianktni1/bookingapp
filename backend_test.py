@@ -293,6 +293,58 @@ class WeddingCRMTester:
         endpoint = f"invoices/{self.created_invoice_id}"
         return self.run_test("Invoice Edit - Update Items", "PUT", endpoint, 200, update_data)
 
+    def test_invoice_sync_to_accounts_default(self):
+        """Test that new invoices have sync_to_accounts defaulting to true"""
+        if not self.created_invoice_id:
+            self.log_test("Invoice Sync Default Check", False, error="Missing invoice ID")
+            return False, {}
+        
+        success, invoice = self.run_test("Get Invoice for Sync Check", "GET", f"invoices/{self.created_invoice_id}", 200)
+        if success:
+            sync_to_accounts = invoice.get('sync_to_accounts', False)
+            if sync_to_accounts is True:
+                self.log_test("Invoice Sync Default Check", True, "sync_to_accounts defaults to true")
+                return True, invoice
+            else:
+                self.log_test("Invoice Sync Default Check", False, error=f"sync_to_accounts is {sync_to_accounts}, expected True")
+                return False, {}
+        return False, {}
+
+    def test_invoice_sync_to_accounts_toggle(self):
+        """Test toggling sync_to_accounts field"""
+        if not self.created_invoice_id:
+            self.log_test("Invoice Sync Toggle", False, error="Missing invoice ID")
+            return False, {}
+        
+        # First, set sync_to_accounts to false
+        update_data = {"sync_to_accounts": False}
+        success1, response1 = self.run_test("Invoice Sync - Set False", "PUT", f"invoices/{self.created_invoice_id}", 200, update_data)
+        
+        if success1:
+            # Verify it was set to false
+            success2, invoice = self.run_test("Invoice Sync - Verify False", "GET", f"invoices/{self.created_invoice_id}", 200)
+            if success2 and invoice.get('sync_to_accounts') is False:
+                self.log_test("Invoice Sync Toggle - False", True, "sync_to_accounts set to false")
+                
+                # Now set it back to true
+                update_data = {"sync_to_accounts": True}
+                success3, response3 = self.run_test("Invoice Sync - Set True", "PUT", f"invoices/{self.created_invoice_id}", 200, update_data)
+                
+                if success3:
+                    # Verify it was set to true
+                    success4, invoice2 = self.run_test("Invoice Sync - Verify True", "GET", f"invoices/{self.created_invoice_id}", 200)
+                    if success4 and invoice2.get('sync_to_accounts') is True:
+                        self.log_test("Invoice Sync Toggle - True", True, "sync_to_accounts set to true")
+                        return True, invoice2
+                    else:
+                        self.log_test("Invoice Sync Toggle - True", False, error="Failed to verify sync_to_accounts = true")
+                else:
+                    self.log_test("Invoice Sync Toggle - True", False, error="Failed to set sync_to_accounts = true")
+            else:
+                self.log_test("Invoice Sync Toggle - False", False, error="Failed to verify sync_to_accounts = false")
+        
+        return False, {}
+
     def test_invoice_edit_remove_item(self):
         """Test removing a line item from invoice"""
         if not self.created_invoice_id:
