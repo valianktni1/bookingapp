@@ -281,7 +281,7 @@ export default function QuoteView() {
             <h3 className="font-display text-xl mb-4">Your Selection</h3>
             <div className="space-y-2">
               {quote.items
-                .filter(item => selectedPackages.includes(item.package_id))
+                .filter(item => isPackageSelected(item.package_id))
                 .map(item => (
                   <div key={item.package_id} className="flex justify-between text-sm">
                     <span>{item.name} {item.quantity > 1 ? `x${item.quantity}` : ''}</span>
@@ -290,10 +290,10 @@ export default function QuoteView() {
                 ))}
               
               {selectedPackages.length === 0 && (
-                <p className="text-white/50 text-sm">No packages selected</p>
+                <p className="text-white/50 text-sm">No packages selected - please choose a package above</p>
               )}
               
-              {discount > 0 && (
+              {discount > 0 && selectedPackages.length > 0 && (
                 <div className="flex justify-between text-gold pt-2 border-t border-white/20">
                   <span>Discount {quote.discount_note ? `(${quote.discount_note})` : ''}</span>
                   <span>-£{discount.toLocaleString()}</span>
@@ -305,9 +305,10 @@ export default function QuoteView() {
                 <span>£{finalTotal.toLocaleString()}</span>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-white/20 space-y-1 text-sm text-white/70">
-                <div className="flex justify-between">
-                  <span>Deposit (to secure booking)</span>
+              {selectedPackages.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/20 space-y-1 text-sm text-white/70">
+                  <div className="flex justify-between">
+                    <span>Deposit (to secure booking)</span>
                   <span>£{business.deposit_amount?.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
