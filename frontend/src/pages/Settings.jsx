@@ -270,10 +270,14 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="business" className="space-y-6">
-        <TabsList className="bg-white border border-border/40">
+        <TabsList className="bg-white border border-border/40 flex-wrap">
           <TabsTrigger value="business" data-testid="tab-business">
             <Building2 className="w-4 h-4 mr-2" />
             Business Info
+          </TabsTrigger>
+          <TabsTrigger value="email" data-testid="tab-email">
+            <Mail className="w-4 h-4 mr-2" />
+            Email Settings
           </TabsTrigger>
           <TabsTrigger value="packages" data-testid="tab-packages">
             <Package className="w-4 h-4 mr-2" />
