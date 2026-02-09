@@ -1,92 +1,63 @@
-# Weddings By Mark - CRM & Client Portal v2.0
+# Weddings By Mark - CRM & Client Portal v2.1
 
 ## Original Problem Statement
-Build a Studio Ninja-style CRM/booking management app for wedding photography business with:
-1. Self-hosted on TrueNAS via Docker
+Build a Studio Ninja-style CRM for wedding photography with:
+1. Self-hosted on TrueNAS via Docker/Dockge (port 3005)
 2. Portal at booking.perfectweddingsbymark.uk
 3. Editable invoices (couples change their minds)
-4. Package builder with main packages + add-ons (extra hours, selfie booth, albums, travel charge)
+4. Package builder with main packages + add-ons
+5. Accounts sync toggle (for accounts.weddingsbymark.co.uk integration)
 
 ## Business Details
 - **Business Name:** Weddings By Mark
 - **Address:** 220 Ashurst Road, Manchester M22 5AX
 - **Phone:** 07712 117357
 - **Email:** mark@perfectweddingsbymark.uk
-- **Website:** perfectweddingsbymark.uk
+- **Accounts System:** accounts.weddingsbymark.co.uk
 
-## User Personas
-1. **Mark (Admin)** - Wedding photographer managing leads, quotes, jobs, payments
-2. **Couples (Clients)** - Access client portal to view invoice, sign contract, fill booking details
-
-## Core Requirements
-- Lead management with enquiry form
-- Package builder (main packages + add-ons)
-- Quote builder with pick & choose
-- Editable invoices after creation
-- E-signature contracts
-- Client portal with unique link
-- Bank transfer payments only
-- Self-hosted Docker deployment
-
-## Architecture
-- **Frontend:** React + Tailwind CSS + Shadcn UI
-- **Backend:** FastAPI + MongoDB
-- **Deployment:** Docker Compose for TrueNAS
+## TrueNAS Deployment
+- **Frontend Port:** 3005
+- **Backend Port:** 8001
+- **App Data:** /mnt/apps/appdata/weddings-by-mark/
+- **Backups:** /mnt/weddings_backups/bookings_data/
 
 ## What's Been Implemented (January 2026)
 
-### v2.0 Updates
-- [x] Package system (main packages + add-ons)
-- [x] Quote builder with multi-select
-- [x] Editable invoices (add/remove/edit line items)
-- [x] Docker deployment files for TrueNAS
-- [x] DEPLOYMENT.md with instructions
+### v2.1 Updates
+- [x] Port changed to 3005
+- [x] Dockge-compatible compose file
+- [x] TrueNAS volume paths configured
+- [x] Accounts sync checkbox on invoices (admin-only)
 
-### Package System
-- [x] Main packages (Full Day, Half Day, etc.)
-- [x] Add-ons (Extra Hour, Selfie Booth, Album, Travel Charge)
-- [x] Quantity selector for add-ons
-- [x] Package type filtering
+### Accounts Sync Feature
+- [x] sync_to_accounts field on Invoice model
+- [x] Defaults to TRUE for new invoices
+- [x] Admin can toggle OFF for existing bookings
+- [x] Status indicator on invoice cards (Sync/No Sync)
+- [x] NOT visible on client portal
 
-### Invoice Editing
-- [x] Add new line items
-- [x] Remove line items
-- [x] Edit quantities and prices
-- [x] Change discount
-- [x] Adjust deposit percentage
-- [x] Change due dates
-- [x] Auto-recalculate totals
+### Docker Files
+- docker-compose.yml (standard)
+- dockge-compose.yaml (Dockge-optimized)
+- backend/Dockerfile
+- frontend/Dockerfile
+- frontend/nginx.conf
+- DEPLOYMENT.md
 
-### Docker Deployment
-- [x] docker-compose.yml
-- [x] backend/Dockerfile
-- [x] frontend/Dockerfile
-- [x] frontend/nginx.conf
-- [x] DEPLOYMENT.md
-
-## File Structure
+## Volume Structure
 ```
-/app/
-├── docker-compose.yml
-├── DEPLOYMENT.md
-├── backend/
-│   ├── Dockerfile
-│   ├── server.py
-│   └── requirements.txt
-└── frontend/
-    ├── Dockerfile
-    ├── nginx.conf
-    └── src/
-```
+/mnt/apps/appdata/weddings-by-mark/
+├── mongodb/           # Database
+└── backend/           # App data
 
-## Deployment Steps (TrueNAS)
-1. Copy app to TrueNAS
-2. Run `docker-compose up -d`
-3. Configure Nginx Proxy Manager for booking.perfectweddingsbymark.uk
-4. Enable SSL via Let's Encrypt
+/mnt/weddings_backups/bookings_data/
+├── invoices/          # Invoice PDFs
+├── contracts/         # Signed contracts
+└── exports/           # Data exports
+```
 
 ## Next Tasks
-1. Set up email notifications (new enquiries, payment reminders)
-2. Add PDF export for invoices
-3. Calendar integration
-4. Automated reminder emails
+1. Build actual integration with accounts.weddingsbymark.co.uk API
+2. Add PDF generation for invoices
+3. Email notifications
+4. Calendar view
