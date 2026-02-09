@@ -10,12 +10,16 @@ import {
   MoreVertical,
   Send,
   Trash2,
-  Eye
+  Package,
+  Sparkles,
+  Check,
+  Minus
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -58,7 +63,19 @@ export default function Leads() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
-  const [quoteTemplates, setQuoteTemplates] = useState([]);
+  
+  // Packages & Add-ons
+  const [packages, setPackages] = useState([]);
+  const [addons, setAddons] = useState([]);
+  
+  // Quote Builder State
+  const [selectedPackages, setSelectedPackages] = useState([]);
+  const [selectedAddons, setSelectedAddons] = useState({});
+  const [addonQuantities, setAddonQuantities] = useState({});
+  const [quoteDiscount, setQuoteDiscount] = useState(0);
+  const [discountNote, setDiscountNote] = useState("");
+  const [customMessage, setCustomMessage] = useState("");
+  
   const [formData, setFormData] = useState({
     partner1_name: "",
     partner2_name: "",
@@ -71,7 +88,7 @@ export default function Leads() {
 
   useEffect(() => {
     fetchLeads();
-    fetchQuoteTemplates();
+    fetchPackages();
   }, [statusFilter]);
 
   const fetchLeads = async () => {
@@ -89,12 +106,14 @@ export default function Leads() {
     }
   };
 
-  const fetchQuoteTemplates = async () => {
+  const fetchPackages = async () => {
     try {
-      const response = await axios.get(`${API}/quote-templates`);
-      setQuoteTemplates(response.data);
+      const response = await axios.get(`${API}/packages`);
+      const all = response.data;
+      setPackages(all.filter(p => p.package_type === "main"));
+      setAddons(all.filter(p => p.package_type === "addon"));
     } catch (error) {
-      console.error("Error fetching templates:", error);
+      console.error("Error fetching packages:", error);
     }
   };
 
@@ -142,12 +161,91 @@ export default function Leads() {
     }
   };
 
-  const handleSendQuote = async (templateId) => {
-    if (!selectedLead || !templateId) return;
+  const openQuoteBuilder = (lead) => {
+    setSelectedLead(lead);
+    setSelectedPackages([]);
+    setSelectedAddons({});
+    setAddonQuantities({});
+    setQuoteDiscount(0);
+    setDiscountNote("");
+    setCustomMessage("");
+    setShowQuoteModal(true);
+  };
+
+  const togglePackage = (pkgId) => {
+    setSelectedPackages(prev => 
+      prev.includes(pkgId) 
+        ? prev.filter(id => id !== pkgId)
+        : [...prev, pkgId]
+    );
+  };
+
+  const toggleAddon = (addonId) => {
+    setSelectedAddons(prev => ({
+      ...prev,
+      [addonId]: !prev[addonId]
+    }));
+    if (!addonQuantities[addonId]) {
+      setAddonQuantities(prev => ({ ...prev, [addonId]: 1 }));
+    }
+  };
+
+  const updateAddonQuantity = (addonId, delta) => {
+    setAddonQuantities(prev => ({
+      ...prev,
+      [addonId]: Math.max(1, (prev[addonId] || 1) + delta)
+    }));
+  };
+
+  const calculateTotal = () => {
+    let subtotal = 0;
+    
+    // Add selected packages
+    selectedPackages.forEach(pkgId => {
+      const pkg = packages.find(p => p.id === pkgId);
+      if (pkg) subtotal += pkg.price;
+    });
+    
+    // Add selected addons with quantities
+    Object.keys(selectedAddons).forEach(addonId => {
+      if (selectedAddons[addonId]) {
+        const addon = addons.find(a => a.id === addonId);
+        if (addon) {
+          subtotal += addon.price * (addonQuantities[addonId] || 1);
+        }
+      }
+    });
+    
+    return {
+      subtotal,
+      discount: quoteDiscount,
+      total: subtotal - quoteDiscount
+    };
+  };
+
+  const handleSendQuote = async () => {
+    const selectedPkgIds = [...selectedPackages];
+    const selectedAddonIds = Object.keys(selectedAddons).filter(id => selectedAddons[id]);
+    
+    if (selectedPkgIds.length === 0 && selectedAddonIds.length === 0) {
+      toast.error("Please select at least one package or add-on");
+      return;
+    }
+
+    const allIds = [...selectedPkgIds, ...selectedAddonIds];
+    const quantities = {};
+    selectedAddonIds.forEach(id => {
+      quantities[id] = addonQuantities[id] || 1;
+    });
+
     try {
       await axios.post(`${API}/quotes`, {
         lead_id: selectedLead.id,
-        template_id: templateId,
+        package_ids: allIds,
+        quantities,
+        discount: quoteDiscount,
+        discount_note: discountNote || null,
+        custom_message: customMessage || null,
         valid_days: 14
       });
       toast.success("Quote sent successfully");
@@ -159,6 +257,8 @@ export default function Leads() {
       toast.error("Failed to send quote");
     }
   };
+
+  const { subtotal, discount, total } = calculateTotal();
 
   const filteredLeads = leads.filter(lead => {
     const searchLower = searchTerm.toLowerCase();
@@ -265,14 +365,11 @@ export default function Leads() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          setSelectedLead(lead);
-                          setShowQuoteModal(true);
-                        }}
+                        onClick={() => openQuoteBuilder(lead)}
                         className="border-gold text-gold hover:bg-gold hover:text-white"
                         data-testid={`send-quote-btn-${index}`}
                       >
-                        <Send className="w-4 h-4 mr-1" /> Send Quote
+                        <Send className="w-4 h-4 mr-1" /> Build Quote
                       </Button>
                     )}
                     <DropdownMenu>
@@ -305,7 +402,7 @@ export default function Leads() {
       ) : (
         <Card className="bg-white border-border/40">
           <CardContent className="py-16 text-center">
-            <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
             <p className="text-muted-foreground">No leads found</p>
             <Button 
               onClick={() => setShowAddModal(true)}
@@ -406,50 +503,242 @@ export default function Leads() {
         </DialogContent>
       </Dialog>
 
-      {/* Send Quote Modal */}
+      {/* Quote Builder Modal */}
       <Dialog open={showQuoteModal} onOpenChange={setShowQuoteModal}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display text-xl">Send Quote</DialogTitle>
-          </DialogHeader>
-          {selectedLead && (
-            <div className="py-4">
-              <p className="text-muted-foreground mb-4">
-                Sending quote to <strong>{selectedLead.partner1_name} & {selectedLead.partner2_name}</strong>
+            <DialogTitle className="font-display text-xl">Build Quote</DialogTitle>
+            {selectedLead && (
+              <p className="text-muted-foreground">
+                For {selectedLead.partner1_name} & {selectedLead.partner2_name}
               </p>
-              {quoteTemplates.length > 0 ? (
-                <div className="space-y-3">
-                  {quoteTemplates.map((template) => (
-                    <Card 
-                      key={template.id}
-                      className="cursor-pointer hover:border-gold transition-colors duration-200"
-                      onClick={() => handleSendQuote(template.id)}
-                      data-testid={`quote-template-${template.id}`}
+            )}
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            {/* Main Packages */}
+            <div>
+              <h3 className="font-display text-lg text-obsidian mb-3 flex items-center gap-2">
+                <Package className="w-5 h-5 text-gold" />
+                Select Package
+              </h3>
+              {packages.length > 0 ? (
+                <div className="grid gap-3">
+                  {packages.map((pkg) => (
+                    <div
+                      key={pkg.id}
+                      className={`p-4 rounded-sm border-2 cursor-pointer transition-all duration-200 ${
+                        selectedPackages.includes(pkg.id)
+                          ? "border-gold bg-gold/5"
+                          : "border-border/40 hover:border-gold/50"
+                      }`}
+                      onClick={() => togglePackage(pkg.id)}
+                      data-testid={`package-option-${pkg.id}`}
                     >
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-center">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedPackages.includes(pkg.id)}
+                            className="mt-1"
+                          />
                           <div>
-                            <h4 className="font-medium text-obsidian">{template.name}</h4>
-                            <p className="text-sm text-muted-foreground">{template.description}</p>
+                            <h4 className="font-medium text-obsidian">{pkg.name}</h4>
+                            <p className="text-sm text-muted-foreground">{pkg.description}</p>
+                            {pkg.includes?.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {pkg.includes.map((item, i) => (
+                                  <span key={i} className="text-xs bg-muted px-2 py-0.5 rounded">
+                                    {item}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <p className="font-display text-lg text-gold">
-                            £{template.price.toLocaleString()}
-                          </p>
                         </div>
-                      </CardContent>
-                    </Card>
+                        <p className="font-display text-xl text-gold">
+                          £{pkg.price.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No quote templates found. Create templates in Settings first.
+                <p className="text-muted-foreground text-center py-4">
+                  No packages created yet. Create packages in Settings first.
                 </p>
               )}
             </div>
-          )}
+
+            <Separator />
+
+            {/* Add-ons */}
+            <div>
+              <h3 className="font-display text-lg text-obsidian mb-3 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-sage" />
+                Add-ons
+              </h3>
+              {addons.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {addons.map((addon) => (
+                    <div
+                      key={addon.id}
+                      className={`p-4 rounded-sm border-2 cursor-pointer transition-all duration-200 ${
+                        selectedAddons[addon.id]
+                          ? "border-sage bg-sage/5"
+                          : "border-border/40 hover:border-sage/50"
+                      }`}
+                      onClick={() => toggleAddon(addon.id)}
+                      data-testid={`addon-option-${addon.id}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={!!selectedAddons[addon.id]}
+                            className="mt-1"
+                          />
+                          <div>
+                            <h4 className="font-medium text-obsidian">{addon.name}</h4>
+                            <p className="text-xs text-muted-foreground">{addon.description}</p>
+                          </div>
+                        </div>
+                        <p className="font-display text-sage">
+                          £{addon.price.toLocaleString()}
+                        </p>
+                      </div>
+                      
+                      {/* Quantity selector for selected addons */}
+                      {selectedAddons[addon.id] && (
+                        <div className="flex items-center gap-2 mt-3 ml-7" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-xs text-muted-foreground">Qty:</span>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => updateAddonQuantity(addon.id, -1)}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <span className="w-8 text-center font-medium">
+                            {addonQuantities[addon.id] || 1}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => updateAddonQuantity(addon.id, 1)}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">
+                  No add-ons created yet. Create add-ons in Settings.
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Discount */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Discount (£)</Label>
+                <Input
+                  type="number"
+                  value={quoteDiscount}
+                  onChange={(e) => setQuoteDiscount(parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  data-testid="quote-discount-input"
+                />
+              </div>
+              <div>
+                <Label>Discount Reason (optional)</Label>
+                <Input
+                  value={discountNote}
+                  onChange={(e) => setDiscountNote(e.target.value)}
+                  placeholder="e.g., Early booking discount"
+                  data-testid="discount-note-input"
+                />
+              </div>
+            </div>
+
+            {/* Custom Message */}
+            <div>
+              <Label>Personal Message (optional)</Label>
+              <Textarea
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Add a personal message to your quote..."
+                rows={3}
+                data-testid="custom-message-input"
+              />
+            </div>
+
+            {/* Quote Summary */}
+            <div className="bg-obsidian text-white p-6 rounded-sm">
+              <h4 className="font-display text-lg mb-4">Quote Summary</h4>
+              
+              {/* Selected Items */}
+              <div className="space-y-2 mb-4">
+                {selectedPackages.map(pkgId => {
+                  const pkg = packages.find(p => p.id === pkgId);
+                  return pkg ? (
+                    <div key={pkgId} className="flex justify-between text-sm">
+                      <span>{pkg.name}</span>
+                      <span>£{pkg.price.toLocaleString()}</span>
+                    </div>
+                  ) : null;
+                })}
+                {Object.keys(selectedAddons).filter(id => selectedAddons[id]).map(addonId => {
+                  const addon = addons.find(a => a.id === addonId);
+                  const qty = addonQuantities[addonId] || 1;
+                  return addon ? (
+                    <div key={addonId} className="flex justify-between text-sm">
+                      <span>{addon.name} {qty > 1 ? `x${qty}` : ""}</span>
+                      <span>£{(addon.price * qty).toLocaleString()}</span>
+                    </div>
+                  ) : null;
+                })}
+              </div>
+
+              <Separator className="bg-white/20 my-4" />
+
+              {/* Totals */}
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span>£{subtotal.toLocaleString()}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-gold">
+                    <span>Discount</span>
+                    <span>-£{discount.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xl font-display pt-2 border-t border-white/20">
+                  <span>Total</span>
+                  <span>£{total.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowQuoteModal(false)}>
               Cancel
+            </Button>
+            <Button
+              onClick={handleSendQuote}
+              disabled={selectedPackages.length === 0 && Object.values(selectedAddons).every(v => !v)}
+              className="bg-gold hover:bg-gold/90"
+              data-testid="send-quote-btn"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send Quote
             </Button>
           </DialogFooter>
         </DialogContent>
