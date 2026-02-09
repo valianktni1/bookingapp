@@ -361,6 +361,15 @@ def serialize_doc(doc):
                     'quantity': item.get('quantity', 1)
                 }
     
+    # Handle missing quote fields
+    if 'lead_id' in doc and 'items' in doc:  # This looks like a quote
+        if 'subtotal' not in doc:
+            doc['subtotal'] = 0.0
+        if 'total' not in doc:
+            doc['total'] = doc.get('subtotal', 0.0) - doc.get('discount', 0.0)
+        if 'valid_until' not in doc:
+            doc['valid_until'] = (datetime.now(timezone.utc) + timedelta(days=14)).strftime("%Y-%m-%d")
+    
     return doc
 
 async def get_next_invoice_number():
