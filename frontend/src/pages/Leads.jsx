@@ -743,18 +743,26 @@ export default function Leads() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowQuoteModal(false)}>
               Cancel
             </Button>
             <Button
-              onClick={handleSendQuote}
+              onClick={() => handleSendQuote(false)}
+              disabled={selectedPackages.length === 0 && Object.values(selectedAddons).every(v => !v)}
+              variant="outline"
+              data-testid="save-quote-btn"
+            >
+              Save Quote Only
+            </Button>
+            <Button
+              onClick={() => handleSendQuote(true)}
               disabled={selectedPackages.length === 0 && Object.values(selectedAddons).every(v => !v)}
               className="bg-gold hover:bg-gold/90"
-              data-testid="send-quote-btn"
+              data-testid="send-quote-email-btn"
             >
-              <Send className="w-4 h-4 mr-2" />
-              Send Quote
+              <Mail className="w-4 h-4 mr-2" />
+              Save & Send Email
             </Button>
           </DialogFooter>
         </DialogContent>
