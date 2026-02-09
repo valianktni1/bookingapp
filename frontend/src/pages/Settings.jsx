@@ -69,6 +69,11 @@ export default function Settings() {
     name: "",
     content: ""
   });
+  const [emailTemplateForm, setEmailTemplateForm] = useState({
+    name: "",
+    subject: "",
+    body: ""
+  });
 
   useEffect(() => {
     fetchData();
@@ -76,15 +81,17 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, packagesRes, contractsRes] = await Promise.all([
+      const [settingsRes, packagesRes, contractsRes, emailTemplatesRes] = await Promise.all([
         axios.get(`${API}/settings`),
         axios.get(`${API}/packages?active_only=false`),
-        axios.get(`${API}/contract-templates?active_only=false`)
+        axios.get(`${API}/contract-templates?active_only=false`),
+        axios.get(`${API}/email-templates`)
       ]);
       
       setSettings(settingsRes.data);
       setPackages(packagesRes.data);
       setContractTemplates(contractsRes.data);
+      setEmailTemplates(emailTemplatesRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load settings");
