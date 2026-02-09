@@ -329,6 +329,7 @@ export default function Settings() {
                       onChange={(e) => setSettings({ ...settings, deposit_amount: parseFloat(e.target.value) })}
                       data-testid="deposit-amount-input"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Fixed deposit amount (e.g., £100)</p>
                   </div>
                   <div>
                     <Label>Deposit Due (days after booking)</Label>
@@ -348,6 +349,31 @@ export default function Settings() {
                       data-testid="balance-days-input"
                     />
                   </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-border">
+                <h3 className="font-display text-lg text-obsidian mb-4">Business Logo</h3>
+                <div className="flex items-start gap-6">
+                  <div className="flex-1">
+                    <Label>Logo URL</Label>
+                    <Input
+                      value={settings?.logo_url || ""}
+                      onChange={(e) => setSettings({ ...settings, logo_url: e.target.value })}
+                      placeholder="https://example.com/your-logo.png"
+                      data-testid="logo-url-input"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Enter the URL of your logo image</p>
+                  </div>
+                  {settings?.logo_url && (
+                    <div className="w-32 h-20 bg-obsidian rounded-sm flex items-center justify-center p-2">
+                      <img 
+                        src={settings.logo_url} 
+                        alt="Business Logo Preview" 
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
