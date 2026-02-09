@@ -309,13 +309,14 @@ export default function QuoteView() {
                 <div className="mt-4 pt-4 border-t border-white/20 space-y-1 text-sm text-white/70">
                   <div className="flex justify-between">
                     <span>Deposit (to secure booking)</span>
-                  <span>£{business.deposit_amount?.toLocaleString()}</span>
+                    <span>£{business.deposit_amount?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Balance (45 days before wedding)</span>
+                    <span>£{(finalTotal - (business.deposit_amount || 100)).toLocaleString()}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>Balance (45 days before wedding)</span>
-                  <span>£{(finalTotal - (business.deposit_amount || 100)).toLocaleString()}</span>
-                </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
