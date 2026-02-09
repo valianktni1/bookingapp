@@ -458,6 +458,209 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
+        {/* Email Settings Tab */}
+        <TabsContent value="email">
+          <div className="space-y-6">
+            {/* SMTP Settings Card */}
+            <Card className="bg-white border-border/40 shadow-sm">
+              <CardHeader>
+                <CardTitle className="font-display text-xl">SMTP Settings</CardTitle>
+                <p className="text-sm text-muted-foreground">Configure your email server to send quotes and notifications</p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label>SMTP Host</Label>
+                    <Input
+                      value={settings?.smtp_settings?.host || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, host: e.target.value }
+                      })}
+                      placeholder="smtp.hostinger.com"
+                      data-testid="smtp-host-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>SMTP Port</Label>
+                    <Input
+                      type="number"
+                      value={settings?.smtp_settings?.port || 587}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, port: parseInt(e.target.value) }
+                      })}
+                      placeholder="587"
+                      data-testid="smtp-port-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>Username / Email</Label>
+                    <Input
+                      value={settings?.smtp_settings?.username || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, username: e.target.value }
+                      })}
+                      placeholder="mark@perfectweddingsbymark.uk"
+                      data-testid="smtp-username-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>Password</Label>
+                    <Input
+                      type="password"
+                      value={settings?.smtp_settings?.password || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, password: e.target.value }
+                      })}
+                      placeholder="••••••••"
+                      data-testid="smtp-password-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>From Email</Label>
+                    <Input
+                      value={settings?.smtp_settings?.from_email || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, from_email: e.target.value }
+                      })}
+                      placeholder="mark@perfectweddingsbymark.uk"
+                      data-testid="smtp-from-email-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>From Name</Label>
+                    <Input
+                      value={settings?.smtp_settings?.from_name || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, from_name: e.target.value }
+                      })}
+                      placeholder="Weddings By Mark"
+                      data-testid="smtp-from-name-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={settings?.smtp_settings?.use_tls !== false}
+                      onCheckedChange={(checked) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, use_tls: checked }
+                      })}
+                      data-testid="smtp-tls-switch"
+                    />
+                    <Label>Use TLS (recommended)</Label>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <Button
+                    onClick={handleSaveSettings}
+                    disabled={saving}
+                    className="bg-obsidian hover:bg-obsidian/90"
+                    data-testid="save-smtp-btn"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? "Saving..." : "Save SMTP Settings"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleTestEmail}
+                    disabled={testingEmail || !settings?.smtp_settings?.host}
+                    data-testid="test-email-btn"
+                  >
+                    <TestTube className="w-4 h-4 mr-2" />
+                    {testingEmail ? "Sending..." : "Send Test Email"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email Templates Card */}
+            <Card className="bg-white border-border/40 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-display text-xl">Email Templates</CardTitle>
+                  <p className="text-sm text-muted-foreground">Customize your quote and notification emails</p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setEditingEmailTemplate(null);
+                    setEmailTemplateForm({ name: "", subject: "", body: "" });
+                    setShowEmailTemplateModal(true);
+                  }}
+                  className="bg-gold hover:bg-gold/90"
+                  data-testid="add-email-template-btn"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Template
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {emailTemplates.length > 0 ? (
+                  <div className="space-y-4">
+                    {emailTemplates.map((template, index) => (
+                      <div
+                        key={template.id}
+                        className="flex items-center justify-between p-4 bg-bone rounded-sm"
+                        data-testid={`email-template-item-${index}`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-obsidian">{template.name}</h4>
+                            {template.name === "quote_email" && (
+                              <Badge className="bg-gold/10 text-gold border-gold/20">Default Quote</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">Subject: {template.subject}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditEmailTemplate(template)}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Mail className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground">No email templates yet</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      A default quote template will be created automatically
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-6 p-4 bg-muted/30 rounded-sm">
+                  <h4 className="font-medium text-obsidian mb-2">Available Placeholders</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%client_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%partner1_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%partner2_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%wedding_date%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%quote_link%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%phone%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%email%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%deposit_amount%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%sort_code%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%account_number%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%account_name%</code>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         {/* Main Packages Tab */}
         <TabsContent value="packages">
           <Card className="bg-white border-border/40 shadow-sm">
