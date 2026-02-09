@@ -1,0 +1,112 @@
+{
+  "identity": {
+    "name": "Weddings By Mark - CRM & Portal",
+    "persona": "E1 - The Anti-AI Designer",
+    "tone": "Elegant, Professional, Trustworthy, Organized, Premium",
+    "aesthetic": "Soft Utility (Dashboard) + Immersive Minimal (Portal)"
+  },
+  "typography": {
+    "fonts": {
+      "headings": {
+        "family": "Playfair Display, serif",
+        "weights": ["400", "600", "700"],
+        "usage": "All Page Titles, Section Headers, Client Names in Portal"
+      },
+      "body": {
+        "family": "Manrope, sans-serif",
+        "weights": ["400", "500", "600"],
+        "usage": "UI Elements, Tables, Forms, Buttons, Data"
+      }
+    },
+    "rules": {
+      "headings": "tracking-tight leading-none text-primary",
+      "overline": "uppercase tracking-[0.2em] text-xs font-semibold text-muted-foreground",
+      "body": "leading-relaxed text-foreground/80"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": "#1A1A1A",
+      "background": "#F9F8F6",
+      "surface": "#FFFFFF",
+      "border": "#E2E2E2",
+      "accent_gold": "#D4AF37",
+      "accent_sage": "#7C9082",
+      "danger": "#EF4444",
+      "success": "#10B981"
+    },
+    "usage": {
+      "background": "bg-[#F9F8F6]",
+      "card_bg": "bg-white",
+      "text_primary": "text-[#1A1A1A]",
+      "text_muted": "text-[#1A1A1A]/60",
+      "border_subtle": "border-[#1A1A1A]/10",
+      "status_booked": "text-[#D4AF37] bg-[#D4AF37]/10",
+      "status_new": "text-[#7C9082] bg-[#7C9082]/10",
+      "button_primary": "bg-[#1A1A1A] text-white hover:bg-[#1A1A1A]/90"
+    }
+  },
+  "layout": {
+    "spacing": {
+      "container_padding": "p-6 md:p-12",
+      "section_gap": "gap-8 md:gap-12",
+      "card_padding": "p-6"
+    },
+    "grids": {
+      "dashboard_overview": "grid grid-cols-1 md:grid-cols-4 gap-6",
+      "portal_gallery": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+    },
+    "radius": "rounded-sm"
+  },
+  "components": {
+    "buttons": {
+      "style": "sharp edges or slightly rounded (rounded-sm), uppercase text for CTAs, tracking-wide",
+      "classes": "h-12 px-8 font-medium transition-all duration-300"
+    },
+    "cards": {
+      "style": "Flat white surface, 1px subtle border, no shadow or very soft shadow",
+      "classes": "bg-white border border-border/40 shadow-sm hover:shadow-md transition-shadow duration-300"
+    },
+    "inputs": {
+      "style": "Minimalist, bottom border only or very light full border",
+      "classes": "bg-transparent border-input focus:ring-1 focus:ring-primary/20"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-md bg-white/70 border border-white/20",
+    "textures": "Use a subtle noise texture overlay on the main background if possible to reduce digital flatness",
+    "motion": "Smooth fade-ins for page loads. Staggered entrance for list items."
+  },
+  "image_urls": {
+    "hero_couple": "https://images.unsplash.com/photo-1770582071285-e5d2ef206180?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxlbGVnYW50JTIwd2VkZGluZyUyMGNvdXBsZSUyMHBvcnRyYWl0JTIwb3V0ZG9vcnxlbnwwfHx8fDE3NzA2MzkyMzB8MA&ixlib=rb-4.1.0&q=85",
+    "photographer_avatar": "https://images.unsplash.com/photo-1744837749712-bc8733ac032b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBtYWxlJTIwcGhvdG9ncmFwaGVyJTIwaG9sZGluZyUyMGNhbWVyYSUyMHBvcnRyYWl0fGVufDB8fHx8MTc3MDYzOTI0OXww&ixlib=rb-4.1.0&q=85",
+    "wedding_detail": "https://images.unsplash.com/photo-1742821855272-981ae713ebd5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHx3ZWRkaW5nJTIwcGhvdG9ncmFwaGVyJTIwY2FtZXJhJTIwbGVucyUyMGRldGFpbHN8ZW58MHx8fHwxNzcwNjM5MjM0fDA&ixlib=rb-4.1.0&q=85"
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS: Add '@import url(\"https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Playfair+Display:wght@400;600;700&display=swap\");' to index.css",
+    "THEME SETUP: Force Light Mode by default. The brand is 'Wedding Elegant', dark mode should only be an option if absolutely necessary, but optimize for Light.",
+    "LAYOUT: Use a Sidebar Layout for the Admin Dashboard. Use a Centered/Top-Nav Layout for the Client Portal.",
+    "CRITICAL: Do not use default Shadcn 'slate' colors. Override them in tailwind.config.js with the palette provided above.",
+    "TESTING: Add data-testid to all interactive elements (buttons, inputs, links)."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use sonner for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}
