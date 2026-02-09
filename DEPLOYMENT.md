@@ -8,16 +8,18 @@
 - Nginx Proxy Manager installed
 - Domain: booking.perfectweddingsbymark.uk pointing to your TrueNAS IP
 
-### Volume Paths to Create
-Before deploying, create these directories on TrueNAS:
+### Volume Paths (Already Created)
+Your TrueNAS datasets:
 
+```
+/mnt/apps/bookingsappdata           → App data (MongoDB, backend)
+/mnt/weddings_backups/bookings_data → Client data (invoices, contracts, PDFs)
+```
+
+Create subdirectories:
 ```bash
-# App data
-mkdir -p /mnt/apps/appdata/weddings-by-mark/mongodb
-mkdir -p /mnt/apps/appdata/weddings-by-mark/backend
-
-# Customer data backups
-mkdir -p /mnt/weddings_backups/bookings_data
+mkdir -p /mnt/apps/bookingsappdata/mongodb
+mkdir -p /mnt/apps/bookingsappdata/backend
 mkdir -p /mnt/weddings_backups/bookings_data/invoices
 mkdir -p /mnt/weddings_backups/bookings_data/contracts
 mkdir -p /mnt/weddings_backups/bookings_data/exports
@@ -43,7 +45,7 @@ mkdir -p /mnt/weddings_backups/bookings_data/exports
    ```
 
 ### Port Configuration
-- **Frontend:** Port 3005 (changed from default 3000)
+- **Frontend:** Port 3005
 - **Backend API:** Port 8001
 - **MongoDB:** Internal only (not exposed)
 
@@ -87,8 +89,8 @@ location /api {
 
 | Path | Purpose |
 |------|---------|
-| `/mnt/apps/appdata/weddings-by-mark/mongodb` | MongoDB database files |
-| `/mnt/apps/appdata/weddings-by-mark/backend` | Backend app logs, temp files |
+| `/mnt/apps/bookingsappdata/mongodb` | MongoDB database files |
+| `/mnt/apps/bookingsappdata/backend` | Backend app logs, temp files |
 | `/mnt/weddings_backups/bookings_data` | Customer data for backup |
 | `/mnt/weddings_backups/bookings_data/invoices` | Invoice PDFs |
 | `/mnt/weddings_backups/bookings_data/contracts` | Signed contracts |
@@ -185,7 +187,7 @@ docker-compose up -d
     ├── package.json
     └── src/
 
-/mnt/apps/appdata/weddings-by-mark/
+/mnt/apps/bookingsappdata/
 ├── mongodb/                # Database files
 └── backend/                # App data
 
