@@ -149,8 +149,7 @@ export default function Invoices() {
       sum + ((item.quantity || 1) * (item.unit_price || 0)), 0) || 0;
     const discount = editingInvoice?.discount || 0;
     const total = subtotal - discount;
-    const depositPct = editingInvoice?.deposit_percentage || 25;
-    const depositAmount = total * (depositPct / 100);
+    const depositAmount = editingInvoice?.deposit_amount || 100;
     const balanceAmount = total - depositAmount;
     return { subtotal, total, depositAmount, balanceAmount };
   };
@@ -169,7 +168,7 @@ export default function Invoices() {
         line_items: lineItems,
         discount: editingInvoice.discount || 0,
         discount_note: editingInvoice.discount_note,
-        deposit_percentage: editingInvoice.deposit_percentage,
+        deposit_amount: editingInvoice.deposit_amount,
         deposit_due_date: editingInvoice.deposit_due_date,
         balance_due_date: editingInvoice.balance_due_date,
         notes: editingInvoice.notes,
