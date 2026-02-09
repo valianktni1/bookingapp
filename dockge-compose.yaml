@@ -1,0 +1,93 @@
+# Weddings By Mark CRM - Dockge Stack
+# Copy this entire file to Dockge as a new stack
+# Or save as compose.yaml in your Dockge stacks folder
+
+version: "3.8"
+
+x-dockge:
+  stack-name: weddings-by-mark
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: wbm-mongodb
+    restart: unless-stopped
+    volumes:
+      - /mnt/apps/appdata/weddings-by-mark/mongodb:/data/db
+    networks:
+      - wbm-network
+    environment:
+      MONGO_INITDB_DATABASE: weddings_by_mark
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI Backend
+  backend:
+    image: wbm-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wbm-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_URL: mongodb://mongodb:27017
+      DB_NAME: weddings_by_mark
+      CORS_ORIGINS: https://booking.perfectweddingsbymark.uk,http://localhost:3005
+      BACKUP_PATH: /data/backups
+      PDF_PATH: /data/backups/invoices
+    volumes:
+      # App data (logs, temp files)
+      - /mnt/apps/appdata/weddings-by-mark/backend:/app/data
+      # Customer data backups (invoices, PDFs, calendar)
+      - /mnt/weddings_backups/bookings_data:/data/backups
+    networks:
+      - wbm-network
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    image: wbm-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: https://booking.perfectweddingsbymark.uk
+    container_name: wbm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - wbm-network
+    ports:
+      - "3005:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  wbm-network:
+    driver: bridge
+    name: wbm-network
+
+# Volume paths on TrueNAS:
+# /mnt/apps/appdata/weddings-by-mark/mongodb    - MongoDB data
+# /mnt/apps/appdata/weddings-by-mark/backend    - Backend app data
+# /mnt/weddings_backups/bookings_data           - Customer invoices, PDFs, calendar
+#   └── /invoices                               - Invoice PDFs
+#   └── /contracts                              - Signed contracts
+#   └── /exports                                - Data exports

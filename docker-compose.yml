@@ -1,4 +1,8 @@
-version: '3.8'
+# Weddings By Mark CRM - Dockge Compose
+# Stack Name: weddings-by-mark
+# Port: 3005 (frontend) / 8001 (backend API)
+
+version: "3.8"
 
 services:
   mongodb:
@@ -6,7 +10,7 @@ services:
     container_name: wbm-mongodb
     restart: unless-stopped
     volumes:
-      - mongodb_data:/data/db
+      - /mnt/apps/appdata/weddings-by-mark/mongodb:/data/db
     networks:
       - wbm-network
     environment:
@@ -23,7 +27,11 @@ services:
     environment:
       - MONGO_URL=mongodb://mongodb:27017
       - DB_NAME=weddings_by_mark
-      - CORS_ORIGINS=https://booking.perfectweddingsbymark.uk,http://localhost:3000
+      - CORS_ORIGINS=https://booking.perfectweddingsbymark.uk,http://localhost:3005
+      - BACKUP_PATH=/data/backups
+    volumes:
+      - /mnt/apps/appdata/weddings-by-mark/backend:/app/data
+      - /mnt/weddings_backups/bookings_data:/data/backups
     networks:
       - wbm-network
     ports:
@@ -42,11 +50,8 @@ services:
     networks:
       - wbm-network
     ports:
-      - "3000:80"
+      - "3005:80"
 
 networks:
   wbm-network:
     driver: bridge
-
-volumes:
-  mongodb_data:
