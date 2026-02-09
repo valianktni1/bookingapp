@@ -384,16 +384,13 @@ Signed: ___________________ Date: ___________
         return self.run_test("Get Quotes", "GET", "quotes", 200)
 
     def test_accept_quote(self):
-        """Test accepting a quote to create a job"""
+        """Test accepting a quote to create a job (legacy method)"""
         if not self.created_quote_id or not self.created_contract_template_id:
-            self.log_test("Accept Quote", False, error="Missing quote or contract template ID")
+            self.log_test("Accept Quote (Legacy)", False, error="Missing quote or contract template ID")
             return False, {}
         
         endpoint = f"jobs/accept-quote/{self.created_quote_id}?contract_template_id={self.created_contract_template_id}"
-        success, response = self.run_test("Accept Quote", "POST", endpoint, 200)
-        if success and response.get('job', {}).get('id'):
-            self.created_job_id = response['job']['id']
-            self.portal_token = response['job'].get('portal_token')
+        success, response = self.run_test("Accept Quote (Legacy)", "POST", endpoint, 200)
         return success, response
 
     def test_get_jobs(self):
