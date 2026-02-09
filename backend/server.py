@@ -75,8 +75,9 @@ class BusinessSettings(BaseModel):
     logo_url: str = ""
     bank_details: BankDetails = Field(default_factory=BankDetails)
     deposit_days: int = 1
-    deposit_percentage: int = 25
+    deposit_amount: float = 100  # Fixed £ deposit amount
     balance_days_before: int = 45
+    logo_url: str = "https://customer-assets.emergentagent.com/job_wedshutter/artifacts/3j0bbqt5_new%20logo%202022%20White%20with%20bevel.png"
 
 class BusinessSettingsUpdate(BaseModel):
     business_name: Optional[str] = None
@@ -87,7 +88,7 @@ class BusinessSettingsUpdate(BaseModel):
     logo_url: Optional[str] = None
     bank_details: Optional[BankDetails] = None
     deposit_days: Optional[int] = None
-    deposit_percentage: Optional[int] = None
+    deposit_amount: Optional[float] = None  # Fixed £ deposit amount
     balance_days_before: Optional[int] = None
 
 # Lead Models
