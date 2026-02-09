@@ -255,6 +255,8 @@ class Invoice(BaseModel):
     balance_paid_date: Optional[str] = None
     status: InvoiceStatus = InvoiceStatus.SENT
     notes: Optional[str] = None
+    sync_to_accounts: bool = True  # Admin checkbox - sync to accounts.weddingsbymark.co.uk
+    synced_at: Optional[str] = None  # When it was synced
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -277,6 +279,7 @@ class InvoiceUpdate(BaseModel):
     balance_paid_date: Optional[str] = None
     notes: Optional[str] = None
     wedding_date: Optional[str] = None
+    sync_to_accounts: Optional[bool] = None  # Admin toggle for accounts sync
 
 # Contract Models
 class Contract(BaseModel):
