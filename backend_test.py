@@ -519,6 +519,11 @@ Signed: ___________________ Date: ___________
         # NEW: Invoice editing functionality
         self.test_invoice_edit_add_item()
         self.test_invoice_edit_update_items()
+        
+        # NEW: Sync to Accounts functionality tests
+        self.test_invoice_sync_to_accounts_default()
+        self.test_invoice_sync_to_accounts_toggle()
+        
         self.test_invoice_edit_remove_item()
         
         # NEW: Client portal with updated invoice
