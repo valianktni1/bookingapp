@@ -803,6 +803,139 @@ async def get_quote(quote_id: str):
         raise HTTPException(status_code=404, detail="Quote not found")
     return Quote(**serialize_doc(quote))
 
+@api_router.post("/quotes/{quote_id}/send-email")
+async def send_quote_email(quote_id: str, background_tasks: BackgroundTasks):
+    """Send quote email to lead"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    settings = await get_settings()
+    template = await get_default_quote_template()
+    
+    # Generate quote view token (use quote id for now)
+    quote_token = quote_id
+    
+    # Build the quote link - use frontend URL
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://booking.perfectweddingsbymark.uk')
+    quote_link = f"{frontend_url}/view-quote/{quote_token}"
+    
+    # Replace placeholders in template
+    body = template.body
+    body = body.replace('%client_name%', f"{lead['partner1_name']} & {lead['partner2_name']}")
+    body = body.replace('%partner1_name%', lead['partner1_name'])
+    body = body.replace('%partner2_name%', lead['partner2_name'])
+    body = body.replace('%wedding_date%', lead.get('wedding_date', 'TBC'))
+    body = body.replace('%quote_link%', quote_link)
+    body = body.replace('%phone%', settings.phone)
+    body = body.replace('%email%', settings.email)
+    body = body.replace('%deposit_amount%', str(int(settings.deposit_amount)))
+    body = body.replace('%sort_code%', settings.bank_details.sort_code)
+    body = body.replace('%account_number%', settings.bank_details.account_number)
+    body = body.replace('%account_name%', settings.bank_details.account_name)
+    
+    subject = template.subject
+    subject = subject.replace('%client_name%', f"{lead['partner1_name']} & {lead['partner2_name']}")
+    
+    # Send the email
+    await send_email(
+        to_email=lead['email'],
+        subject=subject,
+        body=body,
+        settings=settings
+    )
+    
+    # Update quote status
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "sent", "sent_at": datetime.now(timezone.utc).isoformat()}})
+    
+    # Update lead status
+    await db.leads.update_one(
+        {"id": lead['id']},
+        {"$set": {"status": LeadStatus.QUOTE_SENT.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    logger.info(f"Quote email sent to {lead['email']} for quote {quote_id}")
+    return {"message": "Quote email sent successfully", "sent_to": lead['email']}
+
+# ---------- PUBLIC QUOTE VIEW ----------
+@api_router.get("/public/quote/{quote_id}")
+async def get_public_quote(quote_id: str):
+    """Public endpoint for clients to view their quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    settings = await get_settings()
+    
+    # Get all active packages for display
+    packages = await db.packages.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    
+    return {
+        "quote": Quote(**serialize_doc(quote)).model_dump(),
+        "lead": {
+            "partner1_name": lead['partner1_name'],
+            "partner2_name": lead['partner2_name'],
+            "email": lead['email'],
+            "wedding_date": lead.get('wedding_date'),
+            "venue": lead.get('venue')
+        },
+        "packages": [Package(**serialize_doc(p)).model_dump() for p in packages],
+        "business": {
+            "name": settings.business_name,
+            "address": settings.address,
+            "phone": settings.phone,
+            "email": settings.email,
+            "website": settings.website,
+            "logo_url": settings.logo_url,
+            "bank_details": settings.bank_details.model_dump(),
+            "deposit_amount": settings.deposit_amount
+        },
+        "valid_until": quote.get('valid_until')
+    }
+
+@api_router.post("/public/quote/{quote_id}/accept")
+async def accept_public_quote(quote_id: str, selected_packages: List[str], contract_template_id: str):
+    """Client accepts quote with selected packages"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    if quote.get('status') == 'accepted':
+        raise HTTPException(status_code=400, detail="Quote has already been accepted")
+    
+    # Update quote with selected packages
+    selected_items = [item for item in quote.get('items', []) if item.get('package_id') in selected_packages]
+    if not selected_items:
+        raise HTTPException(status_code=400, detail="Please select at least one package")
+    
+    # Calculate new total based on selection
+    new_subtotal = sum(item['price'] * item.get('quantity', 1) for item in selected_items)
+    new_total = new_subtotal - quote.get('discount', 0)
+    
+    # Update quote with selection
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {
+            "selected_items": selected_items,
+            "selected_subtotal": new_subtotal,
+            "selected_total": new_total,
+            "status": "accepted",
+            "accepted_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Now create the job using the accept-quote endpoint logic
+    # (This reuses the existing job creation flow)
+    return {"message": "Quote accepted! Creating your booking...", "redirect_to_accept": True, "quote_id": quote_id, "contract_template_id": contract_template_id}
+
 # ---------- CONTRACT TEMPLATES ----------
 @api_router.post("/contract-templates", response_model=ContractTemplate)
 async def create_contract_template(template: ContractTemplateCreate):
