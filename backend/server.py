@@ -245,8 +245,7 @@ class Invoice(BaseModel):
     discount: float = 0
     discount_note: Optional[str] = None
     total_amount: float
-    deposit_percentage: int = 25
-    deposit_amount: float
+    deposit_amount: float = 100  # Fixed £ deposit
     deposit_due_date: str
     balance_amount: float
     balance_due_date: str
@@ -271,7 +270,7 @@ class InvoiceUpdate(BaseModel):
     line_items: Optional[List[InvoiceLineItemUpdate]] = None
     discount: Optional[float] = None
     discount_note: Optional[str] = None
-    deposit_percentage: Optional[int] = None
+    deposit_amount: Optional[float] = None  # Fixed £ deposit
     deposit_due_date: Optional[str] = None
     balance_due_date: Optional[str] = None
     deposit_paid: Optional[bool] = None
