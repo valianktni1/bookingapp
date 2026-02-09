@@ -446,6 +446,119 @@ def recalculate_invoice(invoice_data, settings):
         'balance_amount': balance_amount
     }
 
+async def send_email(to_email: str, subject: str, body: str, settings: BusinessSettings):
+    """Send email via SMTP"""
+    smtp = settings.smtp_settings
+    if not smtp.host or not smtp.username or not smtp.password:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured. Please configure in Settings.")
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{smtp.from_name} <{smtp.from_email or smtp.username}>"
+        msg['To'] = to_email
+        
+        # Create HTML version of the email
+        html_body = body.replace('\n', '<br>')
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Georgia, serif; line-height: 1.6; color: #333; }}
+                .quote-link {{ 
+                    display: inline-block; 
+                    background-color: #c9a962; 
+                    color: white !important; 
+                    padding: 15px 30px; 
+                    text-decoration: none; 
+                    font-weight: bold;
+                    margin: 20px 0;
+                }}
+                .bank-details {{
+                    background-color: #1a1a1a;
+                    color: white;
+                    padding: 20px;
+                    margin: 20px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            {html_body}
+        </body>
+        </html>
+        """
+        
+        # Attach both plain text and HTML versions
+        part1 = MIMEText(body, 'plain')
+        part2 = MIMEText(html_content, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Connect and send
+        if smtp.use_tls:
+            server = smtplib.SMTP(smtp.host, smtp.port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(smtp.host, smtp.port)
+        
+        server.login(smtp.username, smtp.password)
+        server.sendmail(smtp.from_email or smtp.username, to_email, msg.as_string())
+        server.quit()
+        
+        logger.info(f"Email sent successfully to {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+async def get_default_quote_template():
+    """Get or create the default quote email template"""
+    template = await db.email_templates.find_one({"name": "quote_email"}, {"_id": 0})
+    if not template:
+        default_template = EmailTemplate(
+            name="quote_email",
+            subject="Your Wedding Photography Quote from Weddings By Mark",
+            body="""Hi %client_name%,
+
+Thank you for considering Weddings By Mark to capture your special day. I am thrilled to let you know that I still have your date available, and I would be honoured to be a part of it.
+
+I understand that planning a wedding can be overwhelming, but I am here to make the photography part of it as easy and stress-free as possible.
+
+That's why I have put together a tailored quote specifically for your wedding date with all the packages available. You can view, choose, and accept this quote quickly and conveniently through my online booking system.
+
+<a href="%quote_link%" class="quote-link">VIEW YOUR FULL QUOTE HERE</a>
+
+*Please Note* If you are happy and go ahead with the quote :) All payment details are at the bottom of this email :)
+
+But why should you choose Weddings By Mark? Because I believe that your wedding day is just as important to me as it is to you. I am committed to creating timeless images that will become cherished memories for years to come. With my expertise, creativity, and attention to detail, you can rest assured that every precious moment will be captured beautifully.
+
+I am more than happy to answer any questions you may have or provide additional information. Simply drop me a message or give me a call at %phone%, and I will be delighted to help.
+
+Lastly, I would like to take this opportunity to wish you both all the very best for your upcoming wedding day and your future together.
+
+Remember, your quote is valid for seven days from the date of this email, and your booking and wedding/event date will only be secured upon the payment of a £%deposit_amount% deposit.
+
+<div class="bank-details">
+<strong>Bank Transfer Details:</strong><br>
+Sort Code: %sort_code%<br>
+Account No: %account_number%<br>
+Account Name: %account_name%
+</div>
+
+Don't miss out on this opportunity to have your dream wedding photography captured by Weddings By Mark. I look forward to hearing from you soon and being a part of your special day.
+
+Best wishes,
+Mark
+Weddings By Mark
+%phone%
+%email%"""
+        )
+        doc = default_template.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.email_templates.insert_one(doc)
+        return default_template
+    return EmailTemplate(**template)
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
