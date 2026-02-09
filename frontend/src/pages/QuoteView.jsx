@@ -37,9 +37,8 @@ export default function QuoteView() {
     try {
       const response = await axios.get(`${API}/public/quote/${quoteId}`);
       setData(response.data);
-      // Pre-select all items from the quote
-      const itemIds = response.data.quote.items.map(item => item.package_id);
-      setSelectedPackages(itemIds);
+      // Don't pre-select anything - let client choose their package
+      setSelectedPackages([]);
     } catch (err) {
       console.error("Error fetching quote:", err);
       setError("Quote not found or has expired");
