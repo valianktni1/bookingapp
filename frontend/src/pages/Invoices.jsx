@@ -520,6 +520,29 @@ export default function Invoices() {
                 />
               </div>
 
+              {/* Accounts Sync - Admin Only */}
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-amber-800 font-medium">Sync to Accounts</Label>
+                    <p className="text-xs text-amber-600 mt-1">
+                      Send this invoice to accounts.weddingsbymark.co.uk when saved
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Uncheck for existing bookings already in your accounts system
+                    </p>
+                  </div>
+                  <Switch
+                    checked={editingInvoice.sync_to_accounts !== false}
+                    onCheckedChange={(checked) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      sync_to_accounts: checked 
+                    })}
+                    data-testid="sync-to-accounts-switch"
+                  />
+                </div>
+              </div>
+
               {/* Summary */}
               <div className="bg-obsidian text-white p-6 rounded-sm">
                 <h4 className="font-display text-lg mb-4">Updated Totals</h4>
