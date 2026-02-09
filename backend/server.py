@@ -1,15 +1,15 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
+from enum import Enum
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,52 +19,798 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
-app = FastAPI()
+# Create the main app
+app = FastAPI(title="Weddings By Mark CRM")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
+# ============== ENUMS ==============
+class LeadStatus(str, Enum):
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUOTE_SENT = "quote_sent"
+    BOOKED = "booked"
+    LOST = "lost"
+
+class InvoiceStatus(str, Enum):
+    DRAFT = "draft"
+    SENT = "sent"
+    DEPOSIT_PAID = "deposit_paid"
+    FULLY_PAID = "fully_paid"
+    OVERDUE = "overdue"
+
+class ContractStatus(str, Enum):
+    DRAFT = "draft"
+    SENT = "sent"
+    SIGNED = "signed"
+
+# ============== MODELS ==============
+
+# Business Settings
+class BankDetails(BaseModel):
+    account_name: str = "Weddings By Mark"
+    sort_code: str = ""
+    account_number: str = ""
+
+class BusinessSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    business_name: str = "Weddings By Mark"
+    address: str = "220 Ashurst Road, Manchester M22 5AX"
+    phone: str = "07712 117357"
+    email: str = "mark@perfectweddingsbymark.uk"
+    website: str = "perfectweddingsbymark.uk"
+    logo_url: str = ""
+    bank_details: BankDetails = Field(default_factory=BankDetails)
+    deposit_days: int = 1
+    balance_days_before: int = 45
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class BusinessSettingsUpdate(BaseModel):
+    business_name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
+    bank_details: Optional[BankDetails] = None
+    deposit_days: Optional[int] = None
+    balance_days_before: Optional[int] = None
 
-# Add your routes to the router instead of directly to app
+# Lead Models
+class Lead(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    partner1_name: str
+    partner2_name: str
+    email: EmailStr
+    phone: str
+    wedding_date: Optional[str] = None
+    venue: Optional[str] = None
+    message: Optional[str] = None
+    source: str = "website"
+    status: LeadStatus = LeadStatus.NEW
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LeadCreate(BaseModel):
+    partner1_name: str
+    partner2_name: str
+    email: EmailStr
+    phone: str
+    wedding_date: Optional[str] = None
+    venue: Optional[str] = None
+    message: Optional[str] = None
+    source: str = "website"
+
+class LeadUpdate(BaseModel):
+    partner1_name: Optional[str] = None
+    partner2_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    wedding_date: Optional[str] = None
+    venue: Optional[str] = None
+    message: Optional[str] = None
+    status: Optional[LeadStatus] = None
+
+# Quote Template Models
+class QuoteTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: str
+    price: float
+    includes: List[str] = []
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class QuoteTemplateCreate(BaseModel):
+    name: str
+    description: str
+    price: float
+    includes: List[str] = []
+
+# Quote Models
+class Quote(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    lead_id: str
+    template_id: str
+    template_name: str
+    price: float
+    includes: List[str] = []
+    custom_message: Optional[str] = None
+    valid_until: str
+    status: str = "sent"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class QuoteSend(BaseModel):
+    lead_id: str
+    template_id: str
+    custom_message: Optional[str] = None
+    valid_days: int = 14
+
+# Contract Template Models
+class ContractTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    content: str
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ContractTemplateCreate(BaseModel):
+    name: str
+    content: str
+
+# Job Models
+class Job(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    lead_id: str
+    quote_id: str
+    partner1_name: str
+    partner2_name: str
+    email: str
+    phone: str
+    wedding_date: str
+    venue: Optional[str] = None
+    package_name: str
+    package_price: float
+    portal_token: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    invoice_id: Optional[str] = None
+    contract_id: Optional[str] = None
+    booking_form_id: Optional[str] = None
+    status: str = "active"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Invoice Models
+class InvoiceLineItem(BaseModel):
+    description: str
+    amount: float
+
+class Invoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    invoice_number: str
+    partner1_name: str
+    partner2_name: str
+    email: str
+    wedding_date: str
+    line_items: List[InvoiceLineItem] = []
+    total_amount: float
+    deposit_amount: float
+    deposit_due_date: str
+    balance_amount: float
+    balance_due_date: str
+    deposit_paid: bool = False
+    deposit_paid_date: Optional[str] = None
+    balance_paid: bool = False
+    balance_paid_date: Optional[str] = None
+    status: InvoiceStatus = InvoiceStatus.SENT
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class InvoiceUpdate(BaseModel):
+    deposit_paid: Optional[bool] = None
+    deposit_paid_date: Optional[str] = None
+    balance_paid: Optional[bool] = None
+    balance_paid_date: Optional[str] = None
+    notes: Optional[str] = None
+
+# Contract Models
+class Contract(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    template_id: str
+    content: str
+    partner1_name: str
+    partner2_name: str
+    wedding_date: str
+    status: ContractStatus = ContractStatus.SENT
+    signature_data: Optional[str] = None
+    signed_at: Optional[str] = None
+    signed_by: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ContractSign(BaseModel):
+    signature_data: str
+    signed_by: str
+
+# Booking Form Models
+class BookingForm(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    partner1_name: str
+    partner1_email: str
+    partner1_phone: str
+    partner2_name: str
+    partner2_email: Optional[str] = None
+    partner2_phone: Optional[str] = None
+    wedding_date: str
+    ceremony_time: Optional[str] = None
+    ceremony_venue: Optional[str] = None
+    ceremony_address: Optional[str] = None
+    reception_venue: Optional[str] = None
+    reception_address: Optional[str] = None
+    getting_ready_location: Optional[str] = None
+    special_requests: Optional[str] = None
+    is_completed: bool = False
+    completed_at: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BookingFormUpdate(BaseModel):
+    partner1_name: Optional[str] = None
+    partner1_email: Optional[str] = None
+    partner1_phone: Optional[str] = None
+    partner2_name: Optional[str] = None
+    partner2_email: Optional[str] = None
+    partner2_phone: Optional[str] = None
+    wedding_date: Optional[str] = None
+    ceremony_time: Optional[str] = None
+    ceremony_venue: Optional[str] = None
+    ceremony_address: Optional[str] = None
+    reception_venue: Optional[str] = None
+    reception_address: Optional[str] = None
+    getting_ready_location: Optional[str] = None
+    special_requests: Optional[str] = None
+
+# Email Notification Models
+class EmailNotification(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    to_email: str
+    subject: str
+    body: str
+    type: str
+    related_id: Optional[str] = None
+    sent: bool = False
+    sent_at: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# ============== HELPER FUNCTIONS ==============
+def serialize_doc(doc):
+    """Convert MongoDB document for JSON response"""
+    if doc is None:
+        return None
+    if isinstance(doc.get('created_at'), str):
+        doc['created_at'] = datetime.fromisoformat(doc['created_at'].replace('Z', '+00:00'))
+    if isinstance(doc.get('updated_at'), str):
+        doc['updated_at'] = datetime.fromisoformat(doc['updated_at'].replace('Z', '+00:00'))
+    return doc
+
+async def get_next_invoice_number():
+    """Generate next invoice number"""
+    count = await db.invoices.count_documents({})
+    year = datetime.now().year
+    return f"WBM-{year}-{str(count + 1).zfill(4)}"
+
+async def get_settings():
+    """Get business settings or create default"""
+    settings = await db.settings.find_one({}, {"_id": 0})
+    if not settings:
+        default_settings = BusinessSettings()
+        doc = default_settings.model_dump()
+        doc['created_at'] = doc.get('created_at', datetime.now(timezone.utc)).isoformat() if isinstance(doc.get('created_at'), datetime) else datetime.now(timezone.utc).isoformat()
+        await db.settings.insert_one(doc)
+        return default_settings
+    return BusinessSettings(**settings)
+
+# ============== API ROUTES ==============
+
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Weddings By Mark CRM API", "version": "1.0.0"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+# ---------- SETTINGS ----------
+@api_router.get("/settings", response_model=BusinessSettings)
+async def get_business_settings():
+    return await get_settings()
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+@api_router.put("/settings", response_model=BusinessSettings)
+async def update_business_settings(update: BusinessSettingsUpdate):
+    settings = await get_settings()
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        if 'bank_details' in update_data:
+            update_data['bank_details'] = update_data['bank_details'].model_dump() if hasattr(update_data['bank_details'], 'model_dump') else update_data['bank_details']
+        await db.settings.update_one({"id": settings.id}, {"$set": update_data})
+    updated = await db.settings.find_one({"id": settings.id}, {"_id": 0})
+    return BusinessSettings(**updated)
+
+# ---------- LEADS ----------
+@api_router.post("/leads", response_model=Lead)
+async def create_lead(lead_data: LeadCreate):
+    lead = Lead(**lead_data.model_dump())
+    doc = lead.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    await db.leads.insert_one(doc)
+    logger.info(f"New lead created: {lead.partner1_name} & {lead.partner2_name}")
+    return lead
+
+@api_router.get("/leads", response_model=List[Lead])
+async def get_leads(status: Optional[LeadStatus] = None):
+    query = {}
+    if status:
+        query['status'] = status.value
+    leads = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Lead(**serialize_doc(l)) for l in leads]
+
+@api_router.get("/leads/{lead_id}", response_model=Lead)
+async def get_lead(lead_id: str):
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return Lead(**serialize_doc(lead))
+
+@api_router.put("/leads/{lead_id}", response_model=Lead)
+async def update_lead(lead_id: str, update: LeadUpdate):
+    lead = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        if 'status' in update_data:
+            update_data['status'] = update_data['status'].value if hasattr(update_data['status'], 'value') else update_data['status']
+        await db.leads.update_one({"id": lead_id}, {"$set": update_data})
+    updated = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    return Lead(**serialize_doc(updated))
+
+@api_router.delete("/leads/{lead_id}")
+async def delete_lead(lead_id: str):
+    result = await db.leads.delete_one({"id": lead_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"message": "Lead deleted"}
+
+# ---------- QUOTE TEMPLATES ----------
+@api_router.post("/quote-templates", response_model=QuoteTemplate)
+async def create_quote_template(template: QuoteTemplateCreate):
+    qt = QuoteTemplate(**template.model_dump())
+    doc = qt.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.quote_templates.insert_one(doc)
+    return qt
+
+@api_router.get("/quote-templates", response_model=List[QuoteTemplate])
+async def get_quote_templates(active_only: bool = True):
+    query = {"is_active": True} if active_only else {}
+    templates = await db.quote_templates.find(query, {"_id": 0}).to_list(100)
+    return [QuoteTemplate(**serialize_doc(t)) for t in templates]
+
+@api_router.put("/quote-templates/{template_id}", response_model=QuoteTemplate)
+async def update_quote_template(template_id: str, template: QuoteTemplateCreate):
+    existing = await db.quote_templates.find_one({"id": template_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template not found")
+    await db.quote_templates.update_one({"id": template_id}, {"$set": template.model_dump()})
+    updated = await db.quote_templates.find_one({"id": template_id}, {"_id": 0})
+    return QuoteTemplate(**serialize_doc(updated))
+
+@api_router.delete("/quote-templates/{template_id}")
+async def delete_quote_template(template_id: str):
+    await db.quote_templates.update_one({"id": template_id}, {"$set": {"is_active": False}})
+    return {"message": "Template deactivated"}
+
+# ---------- QUOTES ----------
+@api_router.post("/quotes", response_model=Quote)
+async def send_quote(quote_data: QuoteSend):
+    lead = await db.leads.find_one({"id": quote_data.lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    template = await db.quote_templates.find_one({"id": quote_data.template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Quote template not found")
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
+    valid_until = (datetime.now(timezone.utc) + timedelta(days=quote_data.valid_days)).strftime("%Y-%m-%d")
+    quote = Quote(
+        lead_id=quote_data.lead_id,
+        template_id=quote_data.template_id,
+        template_name=template['name'],
+        price=template['price'],
+        includes=template.get('includes', []),
+        custom_message=quote_data.custom_message,
+        valid_until=valid_until
+    )
+    doc = quote.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.quotes.insert_one(doc)
     
-    return status_checks
+    # Update lead status
+    await db.leads.update_one(
+        {"id": quote_data.lead_id},
+        {"$set": {"status": LeadStatus.QUOTE_SENT.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    logger.info(f"Quote sent to lead {quote_data.lead_id}")
+    return quote
+
+@api_router.get("/quotes", response_model=List[Quote])
+async def get_quotes():
+    quotes = await db.quotes.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Quote(**serialize_doc(q)) for q in quotes]
+
+@api_router.get("/quotes/lead/{lead_id}", response_model=List[Quote])
+async def get_quotes_for_lead(lead_id: str):
+    quotes = await db.quotes.find({"lead_id": lead_id}, {"_id": 0}).to_list(100)
+    return [Quote(**serialize_doc(q)) for q in quotes]
+
+# ---------- CONTRACT TEMPLATES ----------
+@api_router.post("/contract-templates", response_model=ContractTemplate)
+async def create_contract_template(template: ContractTemplateCreate):
+    ct = ContractTemplate(**template.model_dump())
+    doc = ct.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.contract_templates.insert_one(doc)
+    return ct
+
+@api_router.get("/contract-templates", response_model=List[ContractTemplate])
+async def get_contract_templates(active_only: bool = True):
+    query = {"is_active": True} if active_only else {}
+    templates = await db.contract_templates.find(query, {"_id": 0}).to_list(100)
+    return [ContractTemplate(**serialize_doc(t)) for t in templates]
+
+@api_router.put("/contract-templates/{template_id}", response_model=ContractTemplate)
+async def update_contract_template(template_id: str, template: ContractTemplateCreate):
+    existing = await db.contract_templates.find_one({"id": template_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template not found")
+    await db.contract_templates.update_one({"id": template_id}, {"$set": template.model_dump()})
+    updated = await db.contract_templates.find_one({"id": template_id}, {"_id": 0})
+    return ContractTemplate(**serialize_doc(updated))
+
+# ---------- JOBS ----------
+@api_router.post("/jobs/accept-quote/{quote_id}")
+async def accept_quote_create_job(quote_id: str, contract_template_id: str):
+    """When client accepts quote, create job with invoice, contract, and booking form"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    contract_template = await db.contract_templates.find_one({"id": contract_template_id}, {"_id": 0})
+    if not contract_template:
+        raise HTTPException(status_code=404, detail="Contract template not found")
+    
+    settings = await get_settings()
+    wedding_date = lead.get('wedding_date') or (datetime.now(timezone.utc) + timedelta(days=180)).strftime("%Y-%m-%d")
+    
+    # Create Job
+    job = Job(
+        lead_id=lead['id'],
+        quote_id=quote_id,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        phone=lead['phone'],
+        wedding_date=wedding_date,
+        venue=lead.get('venue'),
+        package_name=quote['template_name'],
+        package_price=quote['price']
+    )
+    
+    # Calculate payment dates
+    deposit_due = (datetime.now(timezone.utc) + timedelta(days=settings.deposit_days)).strftime("%Y-%m-%d")
+    wedding_dt = datetime.strptime(wedding_date, "%Y-%m-%d")
+    balance_due = (wedding_dt - timedelta(days=settings.balance_days_before)).strftime("%Y-%m-%d")
+    
+    # Create Invoice
+    invoice_number = await get_next_invoice_number()
+    deposit_amount = quote['price'] * 0.25  # 25% deposit
+    invoice = Invoice(
+        job_id=job.id,
+        invoice_number=invoice_number,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        wedding_date=wedding_date,
+        line_items=[InvoiceLineItem(description=quote['template_name'], amount=quote['price'])],
+        total_amount=quote['price'],
+        deposit_amount=deposit_amount,
+        deposit_due_date=deposit_due,
+        balance_amount=quote['price'] - deposit_amount,
+        balance_due_date=balance_due
+    )
+    
+    # Create Contract with replaced placeholders
+    contract_content = contract_template['content']
+    contract_content = contract_content.replace("{{partner1_name}}", lead['partner1_name'])
+    contract_content = contract_content.replace("{{partner2_name}}", lead['partner2_name'])
+    contract_content = contract_content.replace("{{wedding_date}}", wedding_date)
+    contract_content = contract_content.replace("{{package_name}}", quote['template_name'])
+    contract_content = contract_content.replace("{{package_price}}", f"£{quote['price']:,.2f}")
+    contract_content = contract_content.replace("{{deposit_amount}}", f"£{deposit_amount:,.2f}")
+    contract_content = contract_content.replace("{{balance_amount}}", f"£{quote['price'] - deposit_amount:,.2f}")
+    
+    contract = Contract(
+        job_id=job.id,
+        template_id=contract_template_id,
+        content=contract_content,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        wedding_date=wedding_date
+    )
+    
+    # Create Booking Form
+    booking_form = BookingForm(
+        job_id=job.id,
+        partner1_name=lead['partner1_name'],
+        partner1_email=lead['email'],
+        partner1_phone=lead['phone'],
+        partner2_name=lead['partner2_name'],
+        wedding_date=wedding_date,
+        ceremony_venue=lead.get('venue')
+    )
+    
+    # Update job with IDs
+    job.invoice_id = invoice.id
+    job.contract_id = contract.id
+    job.booking_form_id = booking_form.id
+    
+    # Save all to database
+    job_doc = job.model_dump()
+    job_doc['created_at'] = job_doc['created_at'].isoformat()
+    await db.jobs.insert_one(job_doc)
+    
+    invoice_doc = invoice.model_dump()
+    invoice_doc['created_at'] = invoice_doc['created_at'].isoformat()
+    await db.invoices.insert_one(invoice_doc)
+    
+    contract_doc = contract.model_dump()
+    contract_doc['created_at'] = contract_doc['created_at'].isoformat()
+    await db.contracts.insert_one(contract_doc)
+    
+    booking_form_doc = booking_form.model_dump()
+    booking_form_doc['created_at'] = booking_form_doc['created_at'].isoformat()
+    await db.booking_forms.insert_one(booking_form_doc)
+    
+    # Update lead status to booked
+    await db.leads.update_one(
+        {"id": lead['id']},
+        {"$set": {"status": LeadStatus.BOOKED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Update quote status
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "accepted"}})
+    
+    logger.info(f"Job created for {lead['partner1_name']} & {lead['partner2_name']}")
+    
+    return {
+        "job": job.model_dump(),
+        "invoice": invoice.model_dump(),
+        "contract": contract.model_dump(),
+        "booking_form": booking_form.model_dump(),
+        "portal_url": f"/portal/{job.portal_token}"
+    }
+
+@api_router.get("/jobs", response_model=List[Job])
+async def get_jobs(status: Optional[str] = None):
+    query = {}
+    if status:
+        query['status'] = status
+    jobs = await db.jobs.find(query, {"_id": 0}).sort("wedding_date", 1).to_list(1000)
+    return [Job(**serialize_doc(j)) for j in jobs]
+
+@api_router.get("/jobs/{job_id}", response_model=Job)
+async def get_job(job_id: str):
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return Job(**serialize_doc(job))
+
+# ---------- INVOICES ----------
+@api_router.get("/invoices", response_model=List[Invoice])
+async def get_invoices(status: Optional[InvoiceStatus] = None):
+    query = {}
+    if status:
+        query['status'] = status.value
+    invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Invoice(**serialize_doc(i)) for i in invoices]
+
+@api_router.get("/invoices/{invoice_id}", response_model=Invoice)
+async def get_invoice(invoice_id: str):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return Invoice(**serialize_doc(invoice))
+
+@api_router.put("/invoices/{invoice_id}", response_model=Invoice)
+async def update_invoice(invoice_id: str, update: InvoiceUpdate):
+    invoice = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    
+    # Update status based on payments
+    if update_data.get('deposit_paid') and update_data.get('balance_paid'):
+        update_data['status'] = InvoiceStatus.FULLY_PAID.value
+    elif update_data.get('deposit_paid'):
+        update_data['status'] = InvoiceStatus.DEPOSIT_PAID.value
+    
+    if update_data:
+        await db.invoices.update_one({"id": invoice_id}, {"$set": update_data})
+    
+    updated = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return Invoice(**serialize_doc(updated))
+
+# ---------- CONTRACTS ----------
+@api_router.get("/contracts", response_model=List[Contract])
+async def get_contracts(status: Optional[ContractStatus] = None):
+    query = {}
+    if status:
+        query['status'] = status.value
+    contracts = await db.contracts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Contract(**serialize_doc(c)) for c in contracts]
+
+@api_router.get("/contracts/{contract_id}", response_model=Contract)
+async def get_contract(contract_id: str):
+    contract = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return Contract(**serialize_doc(contract))
+
+@api_router.post("/contracts/{contract_id}/sign", response_model=Contract)
+async def sign_contract(contract_id: str, sign_data: ContractSign):
+    contract = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    
+    update_data = {
+        "signature_data": sign_data.signature_data,
+        "signed_by": sign_data.signed_by,
+        "signed_at": datetime.now(timezone.utc).isoformat(),
+        "status": ContractStatus.SIGNED.value
+    }
+    
+    await db.contracts.update_one({"id": contract_id}, {"$set": update_data})
+    updated = await db.contracts.find_one({"id": contract_id}, {"_id": 0})
+    return Contract(**serialize_doc(updated))
+
+# ---------- BOOKING FORMS ----------
+@api_router.get("/booking-forms/{form_id}", response_model=BookingForm)
+async def get_booking_form(form_id: str):
+    form = await db.booking_forms.find_one({"id": form_id}, {"_id": 0})
+    if not form:
+        raise HTTPException(status_code=404, detail="Booking form not found")
+    return BookingForm(**serialize_doc(form))
+
+@api_router.put("/booking-forms/{form_id}", response_model=BookingForm)
+async def update_booking_form(form_id: str, update: BookingFormUpdate):
+    form = await db.booking_forms.find_one({"id": form_id}, {"_id": 0})
+    if not form:
+        raise HTTPException(status_code=404, detail="Booking form not found")
+    
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        update_data['is_completed'] = True
+        update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
+        await db.booking_forms.update_one({"id": form_id}, {"$set": update_data})
+    
+    updated = await db.booking_forms.find_one({"id": form_id}, {"_id": 0})
+    return BookingForm(**serialize_doc(updated))
+
+# ---------- CLIENT PORTAL ----------
+@api_router.get("/portal/{portal_token}")
+async def get_client_portal(portal_token: str):
+    """Get all client portal data by token"""
+    job = await db.jobs.find_one({"portal_token": portal_token}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Portal not found")
+    
+    settings = await get_settings()
+    invoice = await db.invoices.find_one({"id": job.get('invoice_id')}, {"_id": 0}) if job.get('invoice_id') else None
+    contract = await db.contracts.find_one({"id": job.get('contract_id')}, {"_id": 0}) if job.get('contract_id') else None
+    booking_form = await db.booking_forms.find_one({"id": job.get('booking_form_id')}, {"_id": 0}) if job.get('booking_form_id') else None
+    
+    return {
+        "business": {
+            "name": settings.business_name,
+            "address": settings.address,
+            "phone": settings.phone,
+            "email": settings.email,
+            "website": settings.website,
+            "logo_url": settings.logo_url,
+            "bank_details": settings.bank_details.model_dump()
+        },
+        "job": Job(**serialize_doc(job)).model_dump() if job else None,
+        "invoice": Invoice(**serialize_doc(invoice)).model_dump() if invoice else None,
+        "contract": Contract(**serialize_doc(contract)).model_dump() if contract else None,
+        "booking_form": BookingForm(**serialize_doc(booking_form)).model_dump() if booking_form else None
+    }
+
+# ---------- PUBLIC ENQUIRY FORM ----------
+@api_router.post("/enquiry", response_model=Lead)
+async def submit_enquiry(enquiry: LeadCreate):
+    """Public endpoint for website enquiry form"""
+    lead = Lead(**enquiry.model_dump(), source="website")
+    doc = lead.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    await db.leads.insert_one(doc)
+    logger.info(f"New enquiry from website: {lead.partner1_name} & {lead.partner2_name}")
+    return lead
+
+# ---------- DASHBOARD STATS ----------
+@api_router.get("/dashboard/stats")
+async def get_dashboard_stats():
+    """Get dashboard overview statistics"""
+    now = datetime.now(timezone.utc)
+    
+    # Count leads by status
+    total_leads = await db.leads.count_documents({})
+    new_leads = await db.leads.count_documents({"status": LeadStatus.NEW.value})
+    
+    # Count jobs
+    total_jobs = await db.jobs.count_documents({})
+    
+    # Upcoming weddings (next 90 days)
+    future_date = (now + timedelta(days=90)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+    upcoming_jobs = await db.jobs.find(
+        {"wedding_date": {"$gte": today, "$lte": future_date}, "status": "active"},
+        {"_id": 0}
+    ).sort("wedding_date", 1).to_list(10)
+    
+    # Invoice stats
+    total_invoiced = 0
+    total_received = 0
+    invoices = await db.invoices.find({}, {"_id": 0}).to_list(1000)
+    for inv in invoices:
+        total_invoiced += inv.get('total_amount', 0)
+        if inv.get('deposit_paid'):
+            total_received += inv.get('deposit_amount', 0)
+        if inv.get('balance_paid'):
+            total_received += inv.get('balance_amount', 0)
+    
+    # Pending payments
+    pending_deposits = await db.invoices.count_documents({"deposit_paid": False, "status": {"$ne": InvoiceStatus.FULLY_PAID.value}})
+    
+    return {
+        "total_leads": total_leads,
+        "new_leads": new_leads,
+        "total_jobs": total_jobs,
+        "upcoming_weddings": [Job(**serialize_doc(j)).model_dump() for j in upcoming_jobs],
+        "total_invoiced": total_invoiced,
+        "total_received": total_received,
+        "outstanding": total_invoiced - total_received,
+        "pending_deposits": pending_deposits
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -76,13 +822,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

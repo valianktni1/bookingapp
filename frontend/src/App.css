@@ -1,34 +1,190 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
-}
+/* Weddings By Mark CRM Styles */
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
-}
-
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
+/* Sidebar styles */
+.sidebar {
+    background-color: #1A1A1A;
     color: white;
 }
 
-.App-link {
-    color: #61dafb;
+.sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white hover:bg-white/10 rounded-sm transition-colors duration-200;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
+.sidebar-link.active {
+    @apply text-white bg-white/10 border-l-2 border-gold;
+}
+
+/* Page transitions */
+.page-enter {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 300ms, transform 300ms;
+}
+
+/* Table styles */
+.data-table {
+    @apply w-full;
+}
+
+.data-table th {
+    @apply text-left text-xs uppercase tracking-wider text-muted-foreground font-semibold py-3 px-4 border-b;
+}
+
+.data-table td {
+    @apply py-4 px-4 border-b border-border/50;
+}
+
+.data-table tr:hover {
+    @apply bg-muted/30;
+}
+
+/* Card styles */
+.stat-card {
+    @apply bg-white p-6 rounded-sm border border-border/40 shadow-sm;
+}
+
+.stat-card-value {
+    @apply text-3xl font-display font-semibold text-obsidian;
+}
+
+.stat-card-label {
+    @apply text-sm text-muted-foreground uppercase tracking-wider mt-1;
+}
+
+/* Invoice styles */
+.invoice-header {
+    @apply flex justify-between items-start pb-8 border-b border-border;
+}
+
+.invoice-logo {
+    @apply h-16 object-contain;
+}
+
+.invoice-details {
+    @apply grid grid-cols-2 gap-8 py-8;
+}
+
+.invoice-table th {
+    @apply text-left py-3 px-4 bg-obsidian text-white text-sm uppercase tracking-wider;
+}
+
+.invoice-table td {
+    @apply py-4 px-4 border-b border-border/50;
+}
+
+.invoice-total {
+    @apply text-right py-4 px-4 font-semibold text-lg;
+}
+
+/* Portal styles */
+.portal-section {
+    @apply bg-white rounded-sm border border-border/40 shadow-sm overflow-hidden;
+}
+
+.portal-section-header {
+    @apply px-6 py-4 border-b border-border/40 bg-bone/50;
+}
+
+.portal-section-title {
+    @apply font-display text-xl text-obsidian;
+}
+
+.portal-section-content {
+    @apply p-6;
+}
+
+/* Form styles */
+.form-label {
+    @apply block text-sm font-medium text-obsidian mb-2;
+}
+
+.form-input {
+    @apply w-full px-4 py-3 border border-border rounded-sm bg-white focus:ring-2 focus:ring-gold/30 focus:border-gold outline-none transition-all duration-200;
+}
+
+.form-textarea {
+    @apply w-full px-4 py-3 border border-border rounded-sm bg-white focus:ring-2 focus:ring-gold/30 focus:border-gold outline-none transition-all duration-200 min-h-[120px] resize-y;
+}
+
+/* Button variations */
+.btn {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 font-medium text-sm uppercase tracking-wider transition-all duration-200 rounded-sm;
+}
+
+.btn-primary {
+    @apply bg-obsidian text-white hover:bg-obsidian/90;
+}
+
+.btn-secondary {
+    @apply bg-white text-obsidian border border-border hover:bg-muted;
+}
+
+.btn-accent {
+    @apply bg-gold text-white hover:bg-gold/90;
+}
+
+.btn-danger {
+    @apply bg-destructive text-white hover:bg-destructive/90;
+}
+
+.btn-sm {
+    @apply px-4 py-2 text-xs;
+}
+
+/* Badge styles */
+.badge {
+    @apply inline-flex items-center px-3 py-1 text-xs font-medium uppercase tracking-wider rounded-sm;
+}
+
+/* Empty state */
+.empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center;
+}
+
+.empty-state-icon {
+    @apply w-16 h-16 text-muted-foreground/30 mb-4;
+}
+
+.empty-state-title {
+    @apply text-lg font-display text-obsidian mb-2;
+}
+
+.empty-state-description {
+    @apply text-sm text-muted-foreground max-w-md;
+}
+
+/* Modal overlay */
+.modal-overlay {
+    @apply fixed inset-0 bg-obsidian/50 backdrop-blur-sm z-50;
+}
+
+.modal-content {
+    @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-sm shadow-2xl z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto;
+}
+
+/* Signature pad */
+.signature-wrapper {
+    @apply border-2 border-dashed border-border rounded-sm bg-white p-1;
+}
+
+/* Print optimization */
+@media print {
+    .no-print {
+        display: none !important;
     }
-    to {
-        transform: rotate(360deg);
+    
+    .print-only {
+        display: block !important;
+    }
+    
+    body {
+        background: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
 }
