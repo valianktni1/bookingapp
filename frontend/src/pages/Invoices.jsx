@@ -465,17 +465,16 @@ export default function Invoices() {
               {/* Payment Schedule */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label>Deposit %</Label>
+                  <Label>Deposit Amount (£)</Label>
                   <Input
                     type="number"
-                    value={editingInvoice.deposit_percentage || 25}
+                    value={editingInvoice.deposit_amount || 100}
                     onChange={(e) => setEditingInvoice({ 
                       ...editingInvoice, 
-                      deposit_percentage: parseInt(e.target.value) || 25 
+                      deposit_amount: parseFloat(e.target.value) || 100 
                     })}
                     min="0"
-                    max="100"
-                    data-testid="edit-deposit-pct-input"
+                    data-testid="edit-deposit-amount-input"
                   />
                 </div>
                 <div>
@@ -561,11 +560,11 @@ export default function Invoices() {
                     <span className="font-display text-xl">£{editTotals.total?.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm opacity-70">
-                    <span>Deposit ({editingInvoice.deposit_percentage || 25}%)</span>
+                    <span>Deposit (Fixed)</span>
                     <span>£{editTotals.depositAmount?.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm opacity-70">
-                    <span>Balance ({100 - (editingInvoice.deposit_percentage || 25)}%)</span>
+                    <span>Balance</span>
                     <span>£{editTotals.balanceAmount?.toLocaleString()}</span>
                   </div>
                 </div>
@@ -605,15 +604,24 @@ export default function Invoices() {
 
           {selectedInvoice && settings && (
             <div className="py-4" id="invoice-print">
-              {/* Header */}
+              {/* Header with Logo */}
               <div className="flex justify-between items-start pb-8 border-b border-border">
-                <div>
-                  <h2 className="font-display text-2xl text-obsidian mb-2">
-                    {settings.business_name}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">{settings.address}</p>
-                  <p className="text-sm text-muted-foreground">{settings.phone}</p>
-                  <p className="text-sm text-muted-foreground">{settings.email}</p>
+                <div className="flex items-start gap-4">
+                  {settings.logo_url && (
+                    <img 
+                      src={settings.logo_url} 
+                      alt={settings.business_name} 
+                      className="h-16 w-auto object-contain"
+                    />
+                  )}
+                  <div>
+                    <h2 className="font-display text-2xl text-obsidian mb-2">
+                      {settings.business_name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground">{settings.address}</p>
+                    <p className="text-sm text-muted-foreground">{settings.phone}</p>
+                    <p className="text-sm text-muted-foreground">{settings.email}</p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <h3 className="font-display text-xl text-gold">INVOICE</h3>
@@ -687,14 +695,14 @@ export default function Invoices() {
                 <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Payment Schedule</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-muted/30 rounded-sm">
-                    <p className="text-sm text-muted-foreground">Deposit ({selectedInvoice.deposit_percentage || 25}%)</p>
+                    <p className="text-sm text-muted-foreground">Deposit</p>
                     <p className="font-display text-lg">£{selectedInvoice.deposit_amount?.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">
                       Due: {format(parseISO(selectedInvoice.deposit_due_date), "dd MMM yyyy")}
                     </p>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-sm">
-                    <p className="text-sm text-muted-foreground">Balance ({100 - (selectedInvoice.deposit_percentage || 25)}%)</p>
+                    <p className="text-sm text-muted-foreground">Balance</p>
                     <p className="font-display text-lg">£{selectedInvoice.balance_amount?.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">
                       Due: {format(parseISO(selectedInvoice.balance_due_date), "dd MMM yyyy")}
