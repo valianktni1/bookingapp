@@ -912,15 +912,13 @@ async def add_invoice_item(invoice_id: str, item: InvoiceLineItemUpdate):
     subtotal = sum(i['amount'] for i in line_items)
     discount = invoice.get('discount', 0)
     total = subtotal - discount
-    deposit_pct = invoice.get('deposit_percentage', settings.deposit_percentage)
-    deposit_amount = total * (deposit_pct / 100)
+    deposit_amount = invoice.get('deposit_amount', settings.deposit_amount)
     balance_amount = total - deposit_amount
     
     update_data = {
         'line_items': line_items,
         'subtotal': subtotal,
         'total_amount': total,
-        'deposit_amount': deposit_amount,
         'balance_amount': balance_amount,
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
