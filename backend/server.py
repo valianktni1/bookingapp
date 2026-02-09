@@ -776,7 +776,16 @@ async def get_jobs(status: Optional[str] = None):
     if status:
         query['status'] = status
     jobs = await db.jobs.find(query, {"_id": 0}).sort("wedding_date", 1).to_list(1000)
-    return [Job(**serialize_doc(j)) for j in jobs]
+    valid_jobs = []
+    for j in jobs:
+        try:
+            serialized = serialize_doc(j)
+            job_obj = Job(**serialized)
+            valid_jobs.append(job_obj)
+        except Exception as e:
+            logger.warning(f"Skipping invalid job {j.get('id', 'unknown')}: {str(e)}")
+            continue
+    return valid_jobs
 
 @api_router.get("/jobs/{job_id}", response_model=Job)
 async def get_job(job_id: str):
