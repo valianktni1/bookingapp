@@ -306,6 +306,19 @@ export default function Invoices() {
                         </p>
                       </div>
 
+                      {/* Accounts Sync Status - Admin Only */}
+                      <div className="flex items-center gap-2 text-xs">
+                        {invoice.sync_to_accounts ? (
+                          <span className="flex items-center gap-1 text-sage">
+                            <RefreshCw className="w-3 h-3" /> Sync to Accounts
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <Ban className="w-3 h-3" /> No Sync
+                          </span>
+                        )}
+                      </div>
+
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
