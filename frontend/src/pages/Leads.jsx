@@ -161,11 +161,19 @@ export default function Leads() {
     }
   };
 
-  const openQuoteBuilder = (lead) => {
+  const openQuoteBuilder = async (lead) => {
     setSelectedLead(lead);
-    setSelectedPackages([]);
-    setSelectedAddons({});
-    setAddonQuantities({});
+    // Auto-select ALL packages and addons so client can choose
+    const allPackageIds = packages.filter(p => p.package_type === "main").map(p => p.id);
+    const allAddonSelections = {};
+    const allAddonQtys = {};
+    packages.filter(p => p.package_type === "addon").forEach(p => {
+      allAddonSelections[p.id] = true;
+      allAddonQtys[p.id] = 1;
+    });
+    setSelectedPackages(allPackageIds);
+    setSelectedAddons(allAddonSelections);
+    setAddonQuantities(allAddonQtys);
     setQuoteDiscount(0);
     setDiscountNote("");
     setCustomMessage("");
