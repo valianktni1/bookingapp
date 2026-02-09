@@ -223,7 +223,7 @@ export default function Leads() {
     };
   };
 
-  const handleSendQuote = async () => {
+  const handleSendQuote = async (sendEmail = false) => {
     const selectedPkgIds = [...selectedPackages];
     const selectedAddonIds = Object.keys(selectedAddons).filter(id => selectedAddons[id]);
     
@@ -239,7 +239,8 @@ export default function Leads() {
     });
 
     try {
-      await axios.post(`${API}/quotes`, {
+      // Create the quote
+      const quoteResponse = await axios.post(`${API}/quotes`, {
         lead_id: selectedLead.id,
         package_ids: allIds,
         quantities,
@@ -248,13 +249,28 @@ export default function Leads() {
         custom_message: customMessage || null,
         valid_days: 14
       });
-      toast.success("Quote sent successfully");
+      
+      const quoteId = quoteResponse.data.id;
+      
+      // Send email if requested
+      if (sendEmail) {
+        try {
+          await axios.post(`${API}/quotes/${quoteId}/send-email`);
+          toast.success(`Quote created and email sent to ${selectedLead.email}`);
+        } catch (emailError) {
+          console.error("Error sending email:", emailError);
+          toast.warning("Quote created but email failed to send. Check your SMTP settings.");
+        }
+      } else {
+        toast.success("Quote created successfully");
+      }
+      
       setShowQuoteModal(false);
       setSelectedLead(null);
       fetchLeads();
     } catch (error) {
       console.error("Error sending quote:", error);
-      toast.error("Failed to send quote");
+      toast.error("Failed to create quote");
     }
   };
 
