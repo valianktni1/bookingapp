@@ -243,7 +243,7 @@ export default function Invoices() {
                         {/* Deposit */}
                         <div className={`p-4 rounded-sm ${invoice.deposit_paid ? 'bg-emerald-50' : depositOverdue ? 'bg-red-50' : 'bg-amber-50'}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Deposit ({invoice.deposit_percentage || 25}%)</span>
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Deposit</span>
                             {invoice.deposit_paid ? (
                               <Check className="w-4 h-4 text-emerald-600" />
                             ) : depositOverdue ? (
