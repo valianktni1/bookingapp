@@ -7,16 +7,24 @@ import {
   Clock,
   AlertTriangle,
   Printer,
-  Eye
+  Eye,
+  Edit,
+  Plus,
+  Trash2,
+  Save
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -35,6 +43,9 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchInvoices();
@@ -90,9 +101,92 @@ export default function Invoices() {
     }
   };
 
+  const openEditModal = (invoice) => {
+    setEditingInvoice({
+      ...invoice,
+      line_items: invoice.line_items.map(item => ({
+        ...item,
+        id: item.id || Math.random().toString()
+      }))
+    });
+    setShowEditModal(true);
+  };
+
+  const updateLineItem = (index, field, value) => {
+    const newItems = [...editingInvoice.line_items];
+    newItems[index] = {
+      ...newItems[index],
+      [field]: field === 'description' ? value : parseFloat(value) || 0
+    };
+    // Recalculate amount
+    if (field === 'quantity' || field === 'unit_price') {
+      newItems[index].amount = (newItems[index].quantity || 1) * (newItems[index].unit_price || 0);
+    }
+    setEditingInvoice({ ...editingInvoice, line_items: newItems });
+  };
+
+  const addLineItem = () => {
+    setEditingInvoice({
+      ...editingInvoice,
+      line_items: [
+        ...editingInvoice.line_items,
+        { id: Math.random().toString(), description: "", quantity: 1, unit_price: 0, amount: 0 }
+      ]
+    });
+  };
+
+  const removeLineItem = (index) => {
+    const newItems = editingInvoice.line_items.filter((_, i) => i !== index);
+    setEditingInvoice({ ...editingInvoice, line_items: newItems });
+  };
+
+  const calculateEditTotals = () => {
+    const subtotal = editingInvoice?.line_items?.reduce((sum, item) => 
+      sum + ((item.quantity || 1) * (item.unit_price || 0)), 0) || 0;
+    const discount = editingInvoice?.discount || 0;
+    const total = subtotal - discount;
+    const depositPct = editingInvoice?.deposit_percentage || 25;
+    const depositAmount = total * (depositPct / 100);
+    const balanceAmount = total - depositAmount;
+    return { subtotal, total, depositAmount, balanceAmount };
+  };
+
+  const handleSaveInvoice = async () => {
+    setSaving(true);
+    try {
+      const lineItems = editingInvoice.line_items.map(item => ({
+        id: item.id,
+        description: item.description,
+        quantity: item.quantity || 1,
+        unit_price: item.unit_price || 0
+      }));
+
+      await axios.put(`${API}/invoices/${editingInvoice.id}`, {
+        line_items: lineItems,
+        discount: editingInvoice.discount || 0,
+        discount_note: editingInvoice.discount_note,
+        deposit_percentage: editingInvoice.deposit_percentage,
+        deposit_due_date: editingInvoice.deposit_due_date,
+        balance_due_date: editingInvoice.balance_due_date,
+        notes: editingInvoice.notes
+      });
+      
+      toast.success("Invoice updated successfully");
+      setShowEditModal(false);
+      fetchInvoices();
+    } catch (error) {
+      console.error("Error saving invoice:", error);
+      toast.error("Failed to save invoice");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const printInvoice = () => {
     window.print();
   };
+
+  const editTotals = editingInvoice ? calculateEditTotals() : {};
 
   if (loading) {
     return (
@@ -107,7 +201,7 @@ export default function Invoices() {
       {/* Header */}
       <div>
         <h1 className="font-display text-3xl text-obsidian">Invoices</h1>
-        <p className="text-muted-foreground mt-1">Track payments and balances</p>
+        <p className="text-muted-foreground mt-1">Track payments and edit invoices</p>
       </div>
 
       {/* Invoices List */}
@@ -145,7 +239,7 @@ export default function Invoices() {
                         {/* Deposit */}
                         <div className={`p-4 rounded-sm ${invoice.deposit_paid ? 'bg-emerald-50' : depositOverdue ? 'bg-red-50' : 'bg-amber-50'}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Deposit</span>
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Deposit ({invoice.deposit_percentage || 25}%)</span>
                             {invoice.deposit_paid ? (
                               <Check className="w-4 h-4 text-emerald-600" />
                             ) : depositOverdue ? (
@@ -154,7 +248,7 @@ export default function Invoices() {
                               <Clock className="w-4 h-4 text-amber-600" />
                             )}
                           </div>
-                          <p className="font-display text-lg">£{invoice.deposit_amount.toLocaleString()}</p>
+                          <p className="font-display text-lg">£{invoice.deposit_amount?.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">
                             Due: {format(parseISO(invoice.deposit_due_date), "dd MMM yyyy")}
                           </p>
@@ -173,7 +267,7 @@ export default function Invoices() {
                         {/* Balance */}
                         <div className={`p-4 rounded-sm ${invoice.balance_paid ? 'bg-emerald-50' : balanceOverdue ? 'bg-red-50' : 'bg-muted/50'}`}>
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Balance</span>
+                            <span className="text-xs uppercase tracking-wider text-muted-foreground">Balance ({100 - (invoice.deposit_percentage || 25)}%)</span>
                             {invoice.balance_paid ? (
                               <Check className="w-4 h-4 text-emerald-600" />
                             ) : balanceOverdue ? (
@@ -182,7 +276,7 @@ export default function Invoices() {
                               <Clock className="w-4 h-4 text-muted-foreground" />
                             )}
                           </div>
-                          <p className="font-display text-lg">£{invoice.balance_amount.toLocaleString()}</p>
+                          <p className="font-display text-lg">£{invoice.balance_amount?.toLocaleString()}</p>
                           <p className="text-xs text-muted-foreground">
                             Due: {format(parseISO(invoice.balance_due_date), "dd MMM yyyy")}
                           </p>
@@ -204,22 +298,33 @@ export default function Invoices() {
                       <div className="text-right">
                         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Total</p>
                         <p className="font-display text-2xl text-obsidian">
-                          £{invoice.total_amount.toLocaleString()}
+                          £{invoice.total_amount?.toLocaleString()}
                         </p>
                       </div>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedInvoice(invoice);
-                          setShowViewModal(true);
-                        }}
-                        data-testid={`view-invoice-${index}`}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View Invoice
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditModal(invoice)}
+                          data-testid={`edit-invoice-${index}`}
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedInvoice(invoice);
+                            setShowViewModal(true);
+                          }}
+                          data-testid={`view-invoice-${index}`}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -238,6 +343,212 @@ export default function Invoices() {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Invoice Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              Edit Invoice {editingInvoice?.invoice_number}
+            </DialogTitle>
+          </DialogHeader>
+
+          {editingInvoice && (
+            <div className="py-4 space-y-6">
+              {/* Line Items */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Label className="text-base font-medium">Line Items</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addLineItem}
+                    data-testid="add-line-item-btn"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Item
+                  </Button>
+                </div>
+                
+                <div className="space-y-3">
+                  {editingInvoice.line_items.map((item, index) => (
+                    <div key={item.id} className="flex gap-3 items-start p-3 bg-bone rounded-sm">
+                      <div className="flex-1">
+                        <Input
+                          value={item.description}
+                          onChange={(e) => updateLineItem(index, 'description', e.target.value)}
+                          placeholder="Description"
+                          data-testid={`line-item-description-${index}`}
+                        />
+                      </div>
+                      <div className="w-20">
+                        <Input
+                          type="number"
+                          value={item.quantity || 1}
+                          onChange={(e) => updateLineItem(index, 'quantity', e.target.value)}
+                          placeholder="Qty"
+                          min="1"
+                          data-testid={`line-item-qty-${index}`}
+                        />
+                      </div>
+                      <div className="w-28">
+                        <Input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={(e) => updateLineItem(index, 'unit_price', e.target.value)}
+                          placeholder="Price"
+                          data-testid={`line-item-price-${index}`}
+                        />
+                      </div>
+                      <div className="w-24 text-right pt-2">
+                        <span className="font-medium">£{((item.quantity || 1) * (item.unit_price || 0)).toLocaleString()}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLineItem(index)}
+                        className="text-red-500 hover:text-red-600"
+                        data-testid={`remove-line-item-${index}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Discount */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Discount (£)</Label>
+                  <Input
+                    type="number"
+                    value={editingInvoice.discount || 0}
+                    onChange={(e) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      discount: parseFloat(e.target.value) || 0 
+                    })}
+                    data-testid="edit-discount-input"
+                  />
+                </div>
+                <div>
+                  <Label>Discount Note</Label>
+                  <Input
+                    value={editingInvoice.discount_note || ""}
+                    onChange={(e) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      discount_note: e.target.value 
+                    })}
+                    placeholder="e.g., Early booking discount"
+                    data-testid="edit-discount-note-input"
+                  />
+                </div>
+              </div>
+
+              {/* Payment Schedule */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label>Deposit %</Label>
+                  <Input
+                    type="number"
+                    value={editingInvoice.deposit_percentage || 25}
+                    onChange={(e) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      deposit_percentage: parseInt(e.target.value) || 25 
+                    })}
+                    min="0"
+                    max="100"
+                    data-testid="edit-deposit-pct-input"
+                  />
+                </div>
+                <div>
+                  <Label>Deposit Due Date</Label>
+                  <Input
+                    type="date"
+                    value={editingInvoice.deposit_due_date}
+                    onChange={(e) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      deposit_due_date: e.target.value 
+                    })}
+                    data-testid="edit-deposit-date-input"
+                  />
+                </div>
+                <div>
+                  <Label>Balance Due Date</Label>
+                  <Input
+                    type="date"
+                    value={editingInvoice.balance_due_date}
+                    onChange={(e) => setEditingInvoice({ 
+                      ...editingInvoice, 
+                      balance_due_date: e.target.value 
+                    })}
+                    data-testid="edit-balance-date-input"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label>Notes</Label>
+                <Textarea
+                  value={editingInvoice.notes || ""}
+                  onChange={(e) => setEditingInvoice({ 
+                    ...editingInvoice, 
+                    notes: e.target.value 
+                  })}
+                  placeholder="Internal notes..."
+                  rows={3}
+                  data-testid="edit-notes-input"
+                />
+              </div>
+
+              {/* Summary */}
+              <div className="bg-obsidian text-white p-6 rounded-sm">
+                <h4 className="font-display text-lg mb-4">Updated Totals</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>£{editTotals.subtotal?.toLocaleString()}</span>
+                  </div>
+                  {(editingInvoice.discount || 0) > 0 && (
+                    <div className="flex justify-between text-gold">
+                      <span>Discount</span>
+                      <span>-£{(editingInvoice.discount || 0).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-white/20 pt-2">
+                    <span>Total</span>
+                    <span className="font-display text-xl">£{editTotals.total?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm opacity-70">
+                    <span>Deposit ({editingInvoice.deposit_percentage || 25}%)</span>
+                    <span>£{editTotals.depositAmount?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm opacity-70">
+                    <span>Balance ({100 - (editingInvoice.deposit_percentage || 25)}%)</span>
+                    <span>£{editTotals.balanceAmount?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveInvoice}
+              disabled={saving}
+              className="bg-obsidian hover:bg-obsidian/90"
+              data-testid="save-invoice-btn"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* View Invoice Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
@@ -293,22 +604,38 @@ export default function Invoices() {
                   <thead>
                     <tr className="border-b border-border">
                       <th className="text-left py-3 text-xs uppercase tracking-wider text-muted-foreground">Description</th>
-                      <th className="text-right py-3 text-xs uppercase tracking-wider text-muted-foreground">Amount</th>
+                      <th className="text-center py-3 text-xs uppercase tracking-wider text-muted-foreground w-16">Qty</th>
+                      <th className="text-right py-3 text-xs uppercase tracking-wider text-muted-foreground w-24">Price</th>
+                      <th className="text-right py-3 text-xs uppercase tracking-wider text-muted-foreground w-24">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedInvoice.line_items.map((item, i) => (
+                    {selectedInvoice.line_items?.map((item, i) => (
                       <tr key={i} className="border-b border-border/50">
                         <td className="py-4">{item.description}</td>
-                        <td className="py-4 text-right">£{item.amount.toLocaleString()}</td>
+                        <td className="py-4 text-center">{item.quantity || 1}</td>
+                        <td className="py-4 text-right">£{(item.unit_price || item.amount)?.toLocaleString()}</td>
+                        <td className="py-4 text-right">£{item.amount?.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td className="py-4 font-display text-lg">Total</td>
+                      <td colSpan="3" className="py-3 text-right">Subtotal</td>
+                      <td className="py-3 text-right">£{selectedInvoice.subtotal?.toLocaleString()}</td>
+                    </tr>
+                    {(selectedInvoice.discount || 0) > 0 && (
+                      <tr>
+                        <td colSpan="3" className="py-2 text-right text-gold">
+                          Discount {selectedInvoice.discount_note ? `(${selectedInvoice.discount_note})` : ""}
+                        </td>
+                        <td className="py-2 text-right text-gold">-£{selectedInvoice.discount?.toLocaleString()}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t border-border">
+                      <td colSpan="3" className="py-4 font-display text-lg">Total</td>
                       <td className="py-4 text-right font-display text-xl text-obsidian">
-                        £{selectedInvoice.total_amount.toLocaleString()}
+                        £{selectedInvoice.total_amount?.toLocaleString()}
                       </td>
                     </tr>
                   </tfoot>
@@ -320,15 +647,15 @@ export default function Invoices() {
                 <p className="text-xs uppercase tracking-wider text-muted-foreground mb-4">Payment Schedule</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-muted/30 rounded-sm">
-                    <p className="text-sm text-muted-foreground">Deposit (25%)</p>
-                    <p className="font-display text-lg">£{selectedInvoice.deposit_amount.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">Deposit ({selectedInvoice.deposit_percentage || 25}%)</p>
+                    <p className="font-display text-lg">£{selectedInvoice.deposit_amount?.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">
                       Due: {format(parseISO(selectedInvoice.deposit_due_date), "dd MMM yyyy")}
                     </p>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-sm">
-                    <p className="text-sm text-muted-foreground">Balance (75%)</p>
-                    <p className="font-display text-lg">£{selectedInvoice.balance_amount.toLocaleString()}</p>
+                    <p className="text-sm text-muted-foreground">Balance ({100 - (selectedInvoice.deposit_percentage || 25)}%)</p>
+                    <p className="font-display text-lg">£{selectedInvoice.balance_amount?.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">
                       Due: {format(parseISO(selectedInvoice.balance_due_date), "dd MMM yyyy")}
                     </p>
