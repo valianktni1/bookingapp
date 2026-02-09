@@ -60,9 +60,18 @@ class PackageType(str, Enum):
 
 # Business Settings
 class BankDetails(BaseModel):
-    account_name: str = "Weddings By Mark"
-    sort_code: str = ""
-    account_number: str = ""
+    account_name: str = "Mark Powell (Tide Sole Trader Business Account)"
+    sort_code: str = "04-06-05"
+    account_number: str = "20315075"
+
+class SMTPSettings(BaseModel):
+    host: str = ""
+    port: int = 587
+    username: str = ""
+    password: str = ""
+    from_email: str = ""
+    from_name: str = "Weddings By Mark"
+    use_tls: bool = True
 
 class BusinessSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -74,6 +83,7 @@ class BusinessSettings(BaseModel):
     website: str = "perfectweddingsbymark.uk"
     logo_url: str = "https://customer-assets.emergentagent.com/job_f11e6de5-8f7d-4dd0-865f-7fe908506ea0/artifacts/7bs8gr7j_new%20logo%202022%20White%20with%20bevel.png"
     bank_details: BankDetails = Field(default_factory=BankDetails)
+    smtp_settings: SMTPSettings = Field(default_factory=SMTPSettings)
     deposit_days: int = 1
     deposit_amount: float = 100.0  # Fixed £ deposit amount (e.g., £100)
     balance_days_before: int = 45
@@ -86,6 +96,7 @@ class BusinessSettingsUpdate(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     bank_details: Optional[BankDetails] = None
+    smtp_settings: Optional[SMTPSettings] = None
     deposit_days: Optional[int] = None
     deposit_amount: Optional[float] = None  # Fixed £ deposit amount
     balance_days_before: Optional[int] = None
