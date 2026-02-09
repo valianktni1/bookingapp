@@ -1045,6 +1045,64 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Email Template Modal */}
+      <Dialog open={showEmailTemplateModal} onOpenChange={setShowEmailTemplateModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              {editingEmailTemplate ? "Edit Email Template" : "Add Email Template"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Template Name</Label>
+              <Input
+                value={emailTemplateForm.name}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, name: e.target.value })}
+                placeholder="e.g., quote_email"
+                data-testid="email-template-name-input"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Use lowercase with underscores (e.g., quote_email, payment_reminder)</p>
+            </div>
+            <div>
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTemplateForm.subject}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, subject: e.target.value })}
+                placeholder="Your Wedding Photography Quote from Weddings By Mark"
+                data-testid="email-template-subject-input"
+              />
+            </div>
+            <div>
+              <Label>Email Body</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Use placeholders like %client_name%, %quote_link%, %deposit_amount%, etc.
+              </p>
+              <Textarea
+                value={emailTemplateForm.body}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, body: e.target.value })}
+                placeholder="Hi %client_name%,&#10;&#10;Thank you for considering..."
+                rows={20}
+                className="font-mono text-sm"
+                data-testid="email-template-body-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmailTemplateModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEmailTemplate}
+              className="bg-obsidian hover:bg-obsidian/90"
+              data-testid="save-email-template-btn"
+            >
+              {editingEmailTemplate ? "Update" : "Create"} Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
