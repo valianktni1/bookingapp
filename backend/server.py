@@ -801,7 +801,16 @@ async def get_invoices(status: Optional[InvoiceStatus] = None):
     if status:
         query['status'] = status.value
     invoices = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [Invoice(**serialize_doc(i)) for i in invoices]
+    valid_invoices = []
+    for i in invoices:
+        try:
+            serialized = serialize_doc(i)
+            invoice_obj = Invoice(**serialized)
+            valid_invoices.append(invoice_obj)
+        except Exception as e:
+            logger.warning(f"Skipping invalid invoice {i.get('id', 'unknown')}: {str(e)}")
+            continue
+    return valid_invoices
 
 @api_router.get("/invoices/{invoice_id}", response_model=Invoice)
 async def get_invoice(invoice_id: str):
