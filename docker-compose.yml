@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: wbm-mongodb
+    restart: unless-stopped
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - wbm-network
+    environment:
+      - MONGO_INITDB_DATABASE=weddings_by_mark
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wbm-backend
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=weddings_by_mark
+      - CORS_ORIGINS=https://booking.perfectweddingsbymark.uk,http://localhost:3000
+    networks:
+      - wbm-network
+    ports:
+      - "8001:8001"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_BACKEND_URL=https://booking.perfectweddingsbymark.uk
+    container_name: wbm-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - wbm-network
+    ports:
+      - "3000:80"
+
+networks:
+  wbm-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
