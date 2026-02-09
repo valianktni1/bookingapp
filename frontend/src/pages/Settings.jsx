@@ -322,12 +322,12 @@ export default function Settings() {
                 <h3 className="font-display text-lg text-obsidian mb-4">Payment Settings</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
-                    <Label>Deposit Percentage (%)</Label>
+                    <Label>Deposit Amount (£)</Label>
                     <Input
                       type="number"
-                      value={settings?.deposit_percentage || 25}
-                      onChange={(e) => setSettings({ ...settings, deposit_percentage: parseInt(e.target.value) })}
-                      data-testid="deposit-percentage-input"
+                      value={settings?.deposit_amount || 100}
+                      onChange={(e) => setSettings({ ...settings, deposit_amount: parseFloat(e.target.value) })}
+                      data-testid="deposit-amount-input"
                     />
                   </div>
                   <div>
