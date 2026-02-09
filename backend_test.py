@@ -125,27 +125,212 @@ class WeddingCRMTester:
         """Test getting all leads"""
         return self.run_test("Get Leads", "GET", "leads", 200)
 
-    def test_create_quote_template(self):
-        """Test creating a quote template"""
-        template_data = {
-            "name": "Full Day Coverage Test",
+    def test_create_main_package(self):
+        """Test creating a main package"""
+        package_data = {
+            "name": "Full Day Coverage",
             "description": "Complete wedding day photography package",
             "price": 1500.0,
+            "package_type": "main",
             "includes": [
                 "8 hours coverage",
                 "500+ edited photos",
                 "Online gallery",
                 "USB drive"
-            ]
+            ],
+            "sort_order": 1
         }
-        success, response = self.run_test("Create Quote Template", "POST", "quote-templates", 200, template_data)
+        success, response = self.run_test("Create Main Package", "POST", "packages", 200, package_data)
         if success and response.get('id'):
-            self.created_quote_template_id = response['id']
+            self.created_main_package_id = response['id']
         return success, response
 
-    def test_get_quote_templates(self):
-        """Test getting quote templates"""
-        return self.run_test("Get Quote Templates", "GET", "quote-templates", 200)
+    def test_create_addons(self):
+        """Test creating multiple add-ons"""
+        addons = [
+            {
+                "name": "Extra Hour",
+                "description": "Additional hour of photography coverage",
+                "price": 150.0,
+                "package_type": "addon",
+                "sort_order": 1
+            },
+            {
+                "name": "Selfie Booth",
+                "description": "Fun selfie booth for guests",
+                "price": 300.0,
+                "package_type": "addon",
+                "sort_order": 2
+            },
+            {
+                "name": "Wedding Album",
+                "description": "Premium wedding photo album",
+                "price": 400.0,
+                "package_type": "addon",
+                "sort_order": 3
+            },
+            {
+                "name": "Travel Charge",
+                "description": "Additional travel costs for distant venues",
+                "price": 50.0,
+                "package_type": "addon",
+                "sort_order": 4
+            }
+        ]
+        
+        for addon in addons:
+            success, response = self.run_test(f"Create Add-on: {addon['name']}", "POST", "packages", 200, addon)
+            if success and response.get('id'):
+                self.created_addon_ids.append(response['id'])
+        
+        return len(self.created_addon_ids) == len(addons), {}
+
+    def test_get_packages_by_type(self):
+        """Test filtering packages by type"""
+        # Test main packages
+        success1, response1 = self.run_test("Get Main Packages", "GET", "packages?package_type=main", 200)
+        
+        # Test add-ons
+        success2, response2 = self.run_test("Get Add-ons", "GET", "packages?package_type=addon", 200)
+        
+        # Test all packages
+        success3, response3 = self.run_test("Get All Packages", "GET", "packages", 200)
+        
+        return success1 and success2 and success3, {}
+
+    def test_send_quote_with_packages(self):
+        """Test sending a quote with packages and add-ons"""
+        if not self.created_lead_id or not self.created_main_package_id or not self.created_addon_ids:
+            self.log_test("Send Quote with Packages", False, error="Missing lead, package, or addon IDs")
+            return False, {}
+        
+        # Select main package + 2 add-ons with quantities
+        package_ids = [self.created_main_package_id] + self.created_addon_ids[:2]
+        quantities = {
+            self.created_addon_ids[0]: 2,  # 2x Extra Hour
+            self.created_addon_ids[1]: 1   # 1x Selfie Booth
+        }
+        
+        quote_data = {
+            "lead_id": self.created_lead_id,
+            "package_ids": package_ids,
+            "quantities": quantities,
+            "discount": 100.0,
+            "discount_note": "Early booking discount",
+            "custom_message": "Thank you for choosing Weddings By Mark!",
+            "valid_days": 14
+        }
+        success, response = self.run_test("Send Quote with Packages", "POST", "quotes", 200, quote_data)
+        if success and response.get('id'):
+            self.created_quote_id = response['id']
+        return success, response
+
+    def test_accept_quote_creates_invoice(self):
+        """Test accepting quote creates job with detailed invoice"""
+        if not self.created_quote_id or not self.created_contract_template_id:
+            self.log_test("Accept Quote Creates Invoice", False, error="Missing quote or contract template ID")
+            return False, {}
+        
+        endpoint = f"jobs/accept-quote/{self.created_quote_id}?contract_template_id={self.created_contract_template_id}"
+        success, response = self.run_test("Accept Quote Creates Invoice", "POST", endpoint, 200)
+        if success:
+            self.created_job_id = response.get('job', {}).get('id')
+            self.portal_token = response.get('job', {}).get('portal_token')
+            self.created_invoice_id = response.get('invoice', {}).get('id')
+            
+            # Verify invoice has line items from packages
+            invoice = response.get('invoice', {})
+            line_items = invoice.get('line_items', [])
+            if len(line_items) == 0:
+                self.log_test("Invoice Line Items Check", False, error="Invoice created without line items")
+                return False, {}
+            else:
+                self.log_test("Invoice Line Items Check", True, f"Invoice has {len(line_items)} line items")
+        
+        return success, response
+
+    def test_invoice_edit_add_item(self):
+        """Test adding a line item to an existing invoice"""
+        if not self.created_invoice_id:
+            self.log_test("Invoice Edit - Add Item", False, error="Missing invoice ID")
+            return False, {}
+        
+        new_item = {
+            "description": "Additional Service - Drone Photography",
+            "quantity": 1,
+            "unit_price": 200.0
+        }
+        
+        endpoint = f"invoices/{self.created_invoice_id}/add-item"
+        return self.run_test("Invoice Edit - Add Item", "POST", endpoint, 200, new_item)
+
+    def test_invoice_edit_update_items(self):
+        """Test updating invoice line items, discount, and payment schedule"""
+        if not self.created_invoice_id:
+            self.log_test("Invoice Edit - Update Items", False, error="Missing invoice ID")
+            return False, {}
+        
+        # First get the current invoice
+        success, current_invoice = self.run_test("Get Current Invoice", "GET", f"invoices/{self.created_invoice_id}", 200)
+        if not success:
+            return False, {}
+        
+        # Update line items, discount, and deposit percentage
+        line_items = current_invoice.get('line_items', [])
+        if len(line_items) > 0:
+            # Modify first item
+            line_items[0]['description'] = "Updated: " + line_items[0]['description']
+            line_items[0]['unit_price'] = float(line_items[0]['unit_price']) + 50.0
+        
+        update_data = {
+            "line_items": line_items,
+            "discount": 150.0,
+            "discount_note": "Updated early booking discount",
+            "deposit_percentage": 30,
+            "notes": "Invoice updated during testing"
+        }
+        
+        endpoint = f"invoices/{self.created_invoice_id}"
+        return self.run_test("Invoice Edit - Update Items", "PUT", endpoint, 200, update_data)
+
+    def test_invoice_edit_remove_item(self):
+        """Test removing a line item from invoice"""
+        if not self.created_invoice_id:
+            self.log_test("Invoice Edit - Remove Item", False, error="Missing invoice ID")
+            return False, {}
+        
+        # Get current invoice to find an item to remove
+        success, current_invoice = self.run_test("Get Invoice for Item Removal", "GET", f"invoices/{self.created_invoice_id}", 200)
+        if not success:
+            return False, {}
+        
+        line_items = current_invoice.get('line_items', [])
+        if len(line_items) > 1:  # Only remove if there are multiple items
+            item_to_remove = line_items[-1]  # Remove last item
+            item_id = item_to_remove.get('id')
+            if item_id:
+                endpoint = f"invoices/{self.created_invoice_id}/item/{item_id}"
+                return self.run_test("Invoice Edit - Remove Item", "DELETE", endpoint, 200)
+        
+        self.log_test("Invoice Edit - Remove Item", True, "Skipped - not enough items to remove safely")
+        return True, {}
+
+    def test_client_portal_updated_invoice(self):
+        """Test client portal displays updated invoice"""
+        if not self.portal_token:
+            self.log_test("Client Portal Updated Invoice", False, error="Missing portal token")
+            return False, {}
+        
+        success, response = self.run_test("Client Portal Updated Invoice", "GET", f"portal/{self.portal_token}", 200)
+        if success:
+            invoice = response.get('invoice', {})
+            line_items = invoice.get('line_items', [])
+            if len(line_items) > 0:
+                self.log_test("Portal Invoice Line Items", True, f"Portal shows {len(line_items)} line items")
+            else:
+                self.log_test("Portal Invoice Line Items", False, error="Portal invoice missing line items")
+        
+        return success, response
 
     def test_create_contract_template(self):
         """Test creating a contract template"""
