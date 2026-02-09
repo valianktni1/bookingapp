@@ -847,34 +847,27 @@ async def update_invoice(invoice_id: str, update: InvoiceUpdate):
         subtotal = sum(item['amount'] for item in new_line_items)
         discount = update_data.get('discount', invoice.get('discount', 0))
         total = subtotal - discount
-        deposit_pct = update_data.get('deposit_percentage', invoice.get('deposit_percentage', settings.deposit_percentage))
-        deposit_amount = total * (deposit_pct / 100)
+        deposit_amount = update_data.get('deposit_amount', invoice.get('deposit_amount', settings.deposit_amount))
         balance_amount = total - deposit_amount
         
         update_data['subtotal'] = subtotal
         update_data['total_amount'] = total
-        update_data['deposit_amount'] = deposit_amount
         update_data['balance_amount'] = balance_amount
     
     # If just discount changed, recalculate
     elif 'discount' in update_data:
         subtotal = invoice.get('subtotal', 0)
         total = subtotal - update_data['discount']
-        deposit_pct = update_data.get('deposit_percentage', invoice.get('deposit_percentage', settings.deposit_percentage))
-        deposit_amount = total * (deposit_pct / 100)
+        deposit_amount = invoice.get('deposit_amount', settings.deposit_amount)
         balance_amount = total - deposit_amount
         
         update_data['total_amount'] = total
-        update_data['deposit_amount'] = deposit_amount
         update_data['balance_amount'] = balance_amount
     
-    # If deposit percentage changed, recalculate deposit/balance
-    elif 'deposit_percentage' in update_data:
+    # If deposit amount changed, recalculate balance
+    elif 'deposit_amount' in update_data:
         total = invoice.get('total_amount', 0)
-        deposit_amount = total * (update_data['deposit_percentage'] / 100)
-        balance_amount = total - deposit_amount
-        
-        update_data['deposit_amount'] = deposit_amount
+        balance_amount = total - update_data['deposit_amount']
         update_data['balance_amount'] = balance_amount
     
     # Update status based on payments
