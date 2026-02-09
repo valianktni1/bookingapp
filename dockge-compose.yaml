@@ -14,7 +14,7 @@ services:
     container_name: wbm-mongodb
     restart: unless-stopped
     volumes:
-      - /mnt/apps/appdata/weddings-by-mark/mongodb:/data/db
+      - /mnt/apps/bookingsappdata/mongodb:/data/db
     networks:
       - wbm-network
     environment:
@@ -44,7 +44,7 @@ services:
       PDF_PATH: /data/backups/invoices
     volumes:
       # App data (logs, temp files)
-      - /mnt/apps/appdata/weddings-by-mark/backend:/app/data
+      - /mnt/apps/bookingsappdata/backend:/app/data
       # Customer data backups (invoices, PDFs, calendar)
       - /mnt/weddings_backups/bookings_data:/data/backups
     networks:
@@ -85,8 +85,8 @@ networks:
     name: wbm-network
 
 # Volume paths on TrueNAS:
-# /mnt/apps/appdata/weddings-by-mark/mongodb    - MongoDB data
-# /mnt/apps/appdata/weddings-by-mark/backend    - Backend app data
+# /mnt/apps/bookingsappdata/mongodb             - MongoDB data
+# /mnt/apps/bookingsappdata/backend             - Backend app data
 # /mnt/weddings_backups/bookings_data           - Customer invoices, PDFs, calendar
 #   └── /invoices                               - Invoice PDFs
 #   └── /contracts                              - Signed contracts

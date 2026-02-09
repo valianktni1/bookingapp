@@ -10,7 +10,7 @@ services:
     container_name: wbm-mongodb
     restart: unless-stopped
     volumes:
-      - /mnt/apps/appdata/weddings-by-mark/mongodb:/data/db
+      - /mnt/apps/bookingsappdata/mongodb:/data/db
     networks:
       - wbm-network
     environment:
@@ -30,7 +30,7 @@ services:
       - CORS_ORIGINS=https://booking.perfectweddingsbymark.uk,http://localhost:3005
       - BACKUP_PATH=/data/backups
     volumes:
-      - /mnt/apps/appdata/weddings-by-mark/backend:/app/data
+      - /mnt/apps/bookingsappdata/backend:/app/data
       - /mnt/weddings_backups/bookings_data:/data/backups
     networks:
       - wbm-network
