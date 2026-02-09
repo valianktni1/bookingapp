@@ -199,6 +199,32 @@ class QuoteSend(BaseModel):
     custom_message: Optional[str] = None
     valid_days: int = 14
 
+# Email Template Models
+class EmailTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "quote_email", "payment_reminder"
+    subject: str
+    body: str
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class EmailTemplateCreate(BaseModel):
+    name: str
+    subject: str
+    body: str
+
+class EmailTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SendQuoteEmail(BaseModel):
+    lead_id: str
+    quote_id: str
+    template_id: Optional[str] = None  # If not provided, use default quote template
+
 # Contract Template Models
 class ContractTemplate(BaseModel):
     model_config = ConfigDict(extra="ignore")
