@@ -8,7 +8,10 @@ import {
   FileSignature,
   Building2,
   Package,
-  Sparkles
+  Sparkles,
+  Mail,
+  Send,
+  TestTube
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -39,14 +43,18 @@ export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [packages, setPackages] = useState([]);
   const [contractTemplates, setContractTemplates] = useState([]);
+  const [emailTemplates, setEmailTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   // Modal states
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
+  const [showEmailTemplateModal, setShowEmailTemplateModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [editingContract, setEditingContract] = useState(null);
+  const [editingEmailTemplate, setEditingEmailTemplate] = useState(null);
 
   // Form states
   const [packageForm, setPackageForm] = useState({
