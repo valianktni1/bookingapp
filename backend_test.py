@@ -366,19 +366,17 @@ Signed: ___________________ Date: ___________
         return self.run_test("Get Contract Templates", "GET", "contract-templates", 200)
 
     def test_send_quote(self):
-        """Test sending a quote to a lead"""
-        if not self.created_lead_id or not self.created_quote_template_id:
-            self.log_test("Send Quote", False, error="Missing lead or template ID")
+        """Test sending a quote to a lead (legacy method for compatibility)"""
+        if not self.created_lead_id or not self.created_main_package_id:
+            self.log_test("Send Quote (Legacy)", False, error="Missing lead or package ID")
             return False, {}
         
         quote_data = {
             "lead_id": self.created_lead_id,
-            "template_id": self.created_quote_template_id,
+            "package_ids": [self.created_main_package_id],
             "valid_days": 14
         }
-        success, response = self.run_test("Send Quote", "POST", "quotes", 200, quote_data)
-        if success and response.get('id'):
-            self.created_quote_id = response['id']
+        success, response = self.run_test("Send Quote (Legacy)", "POST", "quotes", 200, quote_data)
         return success, response
 
     def test_get_quotes(self):
