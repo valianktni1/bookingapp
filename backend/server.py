@@ -577,9 +577,60 @@ async def update_business_settings(update: BusinessSettingsUpdate):
     if update_data:
         if 'bank_details' in update_data:
             update_data['bank_details'] = update_data['bank_details'].model_dump() if hasattr(update_data['bank_details'], 'model_dump') else update_data['bank_details']
+        if 'smtp_settings' in update_data:
+            update_data['smtp_settings'] = update_data['smtp_settings'].model_dump() if hasattr(update_data['smtp_settings'], 'model_dump') else update_data['smtp_settings']
         await db.settings.update_one({"id": settings.id}, {"$set": update_data})
     updated = await db.settings.find_one({"id": settings.id}, {"_id": 0})
     return BusinessSettings(**updated)
+
+@api_router.post("/settings/test-email")
+async def test_email_settings():
+    """Test SMTP settings by sending a test email"""
+    settings = await get_settings()
+    if not settings.smtp_settings.host:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+    
+    await send_email(
+        to_email=settings.email,
+        subject="Test Email from Weddings By Mark CRM",
+        body="This is a test email to verify your SMTP settings are working correctly.\n\nIf you received this, your email settings are configured properly!",
+        settings=settings
+    )
+    return {"message": "Test email sent successfully"}
+
+# ---------- EMAIL TEMPLATES ----------
+@api_router.get("/email-templates", response_model=List[EmailTemplate])
+async def get_email_templates():
+    # Ensure default template exists
+    await get_default_quote_template()
+    templates = await db.email_templates.find({}, {"_id": 0}).to_list(100)
+    return [EmailTemplate(**serialize_doc(t)) for t in templates]
+
+@api_router.get("/email-templates/{template_id}", response_model=EmailTemplate)
+async def get_email_template(template_id: str):
+    template = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return EmailTemplate(**serialize_doc(template))
+
+@api_router.post("/email-templates", response_model=EmailTemplate)
+async def create_email_template(template: EmailTemplateCreate):
+    et = EmailTemplate(**template.model_dump())
+    doc = et.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.email_templates.insert_one(doc)
+    return et
+
+@api_router.put("/email-templates/{template_id}", response_model=EmailTemplate)
+async def update_email_template(template_id: str, update: EmailTemplateUpdate):
+    template = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        await db.email_templates.update_one({"id": template_id}, {"$set": update_data})
+    updated = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    return EmailTemplate(**serialize_doc(updated))
 
 # ---------- LEADS ----------
 @api_router.post("/leads", response_model=Lead)
