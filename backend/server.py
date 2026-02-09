@@ -669,8 +669,7 @@ async def accept_quote_create_job(quote_id: str, contract_template_id: str):
     
     # Create Invoice with line items from quote
     invoice_number = await get_next_invoice_number()
-    deposit_pct = settings.deposit_percentage
-    deposit_amount = quote['total'] * (deposit_pct / 100)
+    deposit_amount = settings.deposit_amount  # Fixed £ deposit
     
     line_items = []
     for item in quote.get('items', []):
