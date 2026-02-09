@@ -72,7 +72,7 @@ class BusinessSettings(BaseModel):
     phone: str = "07712 117357"
     email: str = "mark@perfectweddingsbymark.uk"
     website: str = "perfectweddingsbymark.uk"
-    logo_url: str = "https://customer-assets.emergentagent.com/job_wedshutter/artifacts/3j0bbqt5_new%20logo%202022%20White%20with%20bevel.png"
+    logo_url: str = "https://customer-assets.emergentagent.com/job_f11e6de5-8f7d-4dd0-865f-7fe908506ea0/artifacts/7bs8gr7j_new%20logo%202022%20White%20with%20bevel.png"
     bank_details: BankDetails = Field(default_factory=BankDetails)
     deposit_days: int = 1
     deposit_amount: float = 100.0  # Fixed £ deposit amount (e.g., £100)
