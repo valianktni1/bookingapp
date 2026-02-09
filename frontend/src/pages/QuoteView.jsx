@@ -190,7 +190,7 @@ export default function QuoteView() {
               <Card 
                 key={item.package_id}
                 className={`bg-white border-2 transition-all cursor-pointer ${
-                  selectedPackages.includes(item.package_id) 
+                  isPackageSelected(item.package_id) 
                     ? 'border-gold shadow-md' 
                     : 'border-border/40 hover:border-gold/50'
                 }`}
@@ -200,11 +200,11 @@ export default function QuoteView() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        selectedPackages.includes(item.package_id)
+                        isPackageSelected(item.package_id)
                           ? 'bg-gold border-gold'
                           : 'border-muted-foreground/30'
                       }`}>
-                        {selectedPackages.includes(item.package_id) && (
+                        {isPackageSelected(item.package_id) && (
                           <Check className="w-4 h-4 text-white" />
                         )}
                       </div>
@@ -235,7 +235,7 @@ export default function QuoteView() {
                   <Card 
                     key={item.package_id}
                     className={`bg-white border-2 transition-all cursor-pointer ${
-                      selectedPackages.includes(item.package_id) 
+                      isPackageSelected(item.package_id) 
                         ? 'border-sage shadow-md' 
                         : 'border-border/40 hover:border-sage/50'
                     }`}
@@ -245,11 +245,11 @@ export default function QuoteView() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            selectedPackages.includes(item.package_id)
+                            isPackageSelected(item.package_id)
                               ? 'bg-sage border-sage'
                               : 'border-muted-foreground/30'
                           }`}>
-                            {selectedPackages.includes(item.package_id) && (
+                            {isPackageSelected(item.package_id) && (
                               <Check className="w-3 h-3 text-white" />
                             )}
                           </div>
