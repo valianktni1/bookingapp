@@ -1,7 +1,11 @@
-# Weddings By Mark - CRM & Client Portal
+# Weddings By Mark - CRM & Client Portal v2.0
 
 ## Original Problem Statement
-Build a Studio Ninja-style CRM/booking management app for a wedding photographer small business. Key workflow: Website enquiry form → Lead created → Send quote from templates → Client accepts → Auto-generate job, invoice, contract, booking form → Client portal with unique link → E-signature → Payment tracking (bank transfers, deposit +1 day, balance -45 days before wedding).
+Build a Studio Ninja-style CRM/booking management app for wedding photography business with:
+1. Self-hosted on TrueNAS via Docker
+2. Portal at booking.perfectweddingsbymark.uk
+3. Editable invoices (couples change their minds)
+4. Package builder with main packages + add-ons (extra hours, selfie booth, albums, travel charge)
 
 ## Business Details
 - **Business Name:** Weddings By Mark
@@ -15,81 +19,74 @@ Build a Studio Ninja-style CRM/booking management app for a wedding photographer
 2. **Couples (Clients)** - Access client portal to view invoice, sign contract, fill booking details
 
 ## Core Requirements
-- Lead management with status tracking
-- Quote templates with pricing
-- Contract templates with e-signature
-- Invoice generation with deposit/balance schedule
-- Client portal with unique access link
-- Bank transfer payments only (no Stripe)
-- Booking form for wedding details
+- Lead management with enquiry form
+- Package builder (main packages + add-ons)
+- Quote builder with pick & choose
+- Editable invoices after creation
+- E-signature contracts
+- Client portal with unique link
+- Bank transfer payments only
+- Self-hosted Docker deployment
 
 ## Architecture
 - **Frontend:** React + Tailwind CSS + Shadcn UI
 - **Backend:** FastAPI + MongoDB
-- **Authentication:** None required (single user admin)
+- **Deployment:** Docker Compose for TrueNAS
 
 ## What's Been Implemented (January 2026)
-### Admin Dashboard
-- [x] Stats overview (leads, jobs, invoiced, outstanding)
-- [x] Upcoming weddings list
-- [x] Quick action cards
 
-### Lead Management
-- [x] Add/edit/delete leads
-- [x] Status tracking (new, contacted, quote_sent, booked, lost)
-- [x] Search and filter
-- [x] Send quotes from templates
+### v2.0 Updates
+- [x] Package system (main packages + add-ons)
+- [x] Quote builder with multi-select
+- [x] Editable invoices (add/remove/edit line items)
+- [x] Docker deployment files for TrueNAS
+- [x] DEPLOYMENT.md with instructions
 
-### Quotes System
-- [x] Quote templates CRUD
-- [x] Send quotes to leads
-- [x] Accept quotes → creates job + invoice + contract + booking form
+### Package System
+- [x] Main packages (Full Day, Half Day, etc.)
+- [x] Add-ons (Extra Hour, Selfie Booth, Album, Travel Charge)
+- [x] Quantity selector for add-ons
+- [x] Package type filtering
 
-### Invoice Management
-- [x] Auto-generated invoices with branding
-- [x] Deposit (25%) + Balance (75%) schedule
-- [x] Mark payments as received
-- [x] Print/view invoice
+### Invoice Editing
+- [x] Add new line items
+- [x] Remove line items
+- [x] Edit quantities and prices
+- [x] Change discount
+- [x] Adjust deposit percentage
+- [x] Change due dates
+- [x] Auto-recalculate totals
 
-### Contract System
-- [x] Contract templates with placeholders
-- [x] E-signature via canvas
-- [x] Signature tracking
+### Docker Deployment
+- [x] docker-compose.yml
+- [x] backend/Dockerfile
+- [x] frontend/Dockerfile
+- [x] frontend/nginx.conf
+- [x] DEPLOYMENT.md
 
-### Client Portal
-- [x] Unique access link per job
-- [x] View invoice with bank details
-- [x] Sign contract electronically
-- [x] Fill booking form with wedding details
+## File Structure
+```
+/app/
+├── docker-compose.yml
+├── DEPLOYMENT.md
+├── backend/
+│   ├── Dockerfile
+│   ├── server.py
+│   └── requirements.txt
+└── frontend/
+    ├── Dockerfile
+    ├── nginx.conf
+    └── src/
+```
 
-### Settings
-- [x] Business info management
-- [x] Bank details for invoices
-- [x] Payment schedule config (deposit days, balance days)
-- [x] Quote templates management
-- [x] Contract templates management
-
-### Public Enquiry Form
-- [x] Embeddable form at /enquiry
-- [x] Auto-creates leads
-
-## Prioritized Backlog
-### P0 (Critical) - DONE
-- All core features implemented
-
-### P1 (Important)
-- Email notifications (new lead alert, quote sent, payment reminders)
-- PDF export for invoices/contracts
-- Calendar view for upcoming weddings
-
-### P2 (Nice to Have)
-- Gallery integration (Pic-Time, ShootProof)
-- Automated reminder emails
-- Financial reports/analytics
-- Mobile app
+## Deployment Steps (TrueNAS)
+1. Copy app to TrueNAS
+2. Run `docker-compose up -d`
+3. Configure Nginx Proxy Manager for booking.perfectweddingsbymark.uk
+4. Enable SSL via Let's Encrypt
 
 ## Next Tasks
-1. Add email notification system for new enquiries
-2. Implement PDF generation for invoices
-3. Add calendar view for job scheduling
-4. Consider adding automated payment reminders
+1. Set up email notifications (new enquiries, payment reminders)
+2. Add PDF export for invoices
+3. Calendar integration
+4. Automated reminder emails
