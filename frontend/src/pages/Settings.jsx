@@ -6,7 +6,9 @@ import {
   Trash2,
   FileText,
   FileSignature,
-  Building2
+  Building2,
+  Package,
+  Sparkles
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -21,29 +24,38 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function Settings() {
   const [settings, setSettings] = useState(null);
-  const [quoteTemplates, setQuoteTemplates] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [contractTemplates, setContractTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Modal states
-  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [showPackageModal, setShowPackageModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
-  const [editingQuote, setEditingQuote] = useState(null);
+  const [editingPackage, setEditingPackage] = useState(null);
   const [editingContract, setEditingContract] = useState(null);
 
   // Form states
-  const [quoteForm, setQuoteForm] = useState({
+  const [packageForm, setPackageForm] = useState({
     name: "",
     description: "",
     price: "",
-    includes: ""
+    package_type: "main",
+    includes: "",
+    sort_order: 0
   });
   const [contractForm, setContractForm] = useState({
     name: "",
@@ -56,14 +68,14 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, quotesRes, contractsRes] = await Promise.all([
+      const [settingsRes, packagesRes, contractsRes] = await Promise.all([
         axios.get(`${API}/settings`),
-        axios.get(`${API}/quote-templates?active_only=false`),
+        axios.get(`${API}/packages?active_only=false`),
         axios.get(`${API}/contract-templates?active_only=false`)
       ]);
       
       setSettings(settingsRes.data);
-      setQuoteTemplates(quotesRes.data);
+      setPackages(packagesRes.data);
       setContractTemplates(contractsRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -86,30 +98,32 @@ export default function Settings() {
     }
   };
 
-  const handleSaveQuoteTemplate = async () => {
+  const handleSavePackage = async () => {
     try {
       const data = {
-        name: quoteForm.name,
-        description: quoteForm.description,
-        price: parseFloat(quoteForm.price),
-        includes: quoteForm.includes.split("\n").filter(i => i.trim())
+        name: packageForm.name,
+        description: packageForm.description,
+        price: parseFloat(packageForm.price),
+        package_type: packageForm.package_type,
+        includes: packageForm.includes.split("\n").filter(i => i.trim()),
+        sort_order: parseInt(packageForm.sort_order) || 0
       };
 
-      if (editingQuote) {
-        await axios.put(`${API}/quote-templates/${editingQuote.id}`, data);
-        toast.success("Quote template updated");
+      if (editingPackage) {
+        await axios.put(`${API}/packages/${editingPackage.id}`, data);
+        toast.success("Package updated");
       } else {
-        await axios.post(`${API}/quote-templates`, data);
-        toast.success("Quote template created");
+        await axios.post(`${API}/packages`, data);
+        toast.success("Package created");
       }
 
-      setShowQuoteModal(false);
-      setEditingQuote(null);
-      setQuoteForm({ name: "", description: "", price: "", includes: "" });
+      setShowPackageModal(false);
+      setEditingPackage(null);
+      setPackageForm({ name: "", description: "", price: "", package_type: "main", includes: "", sort_order: 0 });
       fetchData();
     } catch (error) {
-      console.error("Error saving quote template:", error);
-      toast.error("Failed to save quote template");
+      console.error("Error saving package:", error);
+      toast.error("Failed to save package");
     }
   };
 
@@ -138,27 +152,29 @@ export default function Settings() {
     }
   };
 
-  const handleDeleteQuoteTemplate = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this template?")) return;
+  const handleDeletePackage = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this package?")) return;
     try {
-      await axios.delete(`${API}/quote-templates/${id}`);
-      toast.success("Template deleted");
+      await axios.delete(`${API}/packages/${id}`);
+      toast.success("Package deleted");
       fetchData();
     } catch (error) {
-      console.error("Error deleting template:", error);
-      toast.error("Failed to delete template");
+      console.error("Error deleting package:", error);
+      toast.error("Failed to delete package");
     }
   };
 
-  const openEditQuote = (template) => {
-    setEditingQuote(template);
-    setQuoteForm({
-      name: template.name,
-      description: template.description,
-      price: template.price.toString(),
-      includes: template.includes.join("\n")
+  const openEditPackage = (pkg) => {
+    setEditingPackage(pkg);
+    setPackageForm({
+      name: pkg.name,
+      description: pkg.description,
+      price: pkg.price.toString(),
+      package_type: pkg.package_type,
+      includes: pkg.includes.join("\n"),
+      sort_order: pkg.sort_order || 0
     });
-    setShowQuoteModal(true);
+    setShowPackageModal(true);
   };
 
   const openEditContract = (template) => {
@@ -169,6 +185,9 @@ export default function Settings() {
     });
     setShowContractModal(true);
   };
+
+  const mainPackages = packages.filter(p => p.package_type === "main");
+  const addons = packages.filter(p => p.package_type === "addon");
 
   if (loading) {
     return (
@@ -183,7 +202,7 @@ export default function Settings() {
       {/* Header */}
       <div>
         <h1 className="font-display text-3xl text-obsidian">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your business settings and templates</p>
+        <p className="text-muted-foreground mt-1">Manage your business settings, packages and templates</p>
       </div>
 
       <Tabs defaultValue="business" className="space-y-6">
@@ -192,13 +211,17 @@ export default function Settings() {
             <Building2 className="w-4 h-4 mr-2" />
             Business Info
           </TabsTrigger>
-          <TabsTrigger value="quotes" data-testid="tab-quotes">
-            <FileText className="w-4 h-4 mr-2" />
-            Quote Templates
+          <TabsTrigger value="packages" data-testid="tab-packages">
+            <Package className="w-4 h-4 mr-2" />
+            Packages
+          </TabsTrigger>
+          <TabsTrigger value="addons" data-testid="tab-addons">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Add-ons
           </TabsTrigger>
           <TabsTrigger value="contracts" data-testid="tab-contracts">
             <FileSignature className="w-4 h-4 mr-2" />
-            Contract Templates
+            Contracts
           </TabsTrigger>
         </TabsList>
 
@@ -297,7 +320,16 @@ export default function Settings() {
 
               <div className="pt-6 border-t border-border">
                 <h3 className="font-display text-lg text-obsidian mb-4">Payment Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <Label>Deposit Percentage (%)</Label>
+                    <Input
+                      type="number"
+                      value={settings?.deposit_percentage || 25}
+                      onChange={(e) => setSettings({ ...settings, deposit_percentage: parseInt(e.target.value) })}
+                      data-testid="deposit-percentage-input"
+                    />
+                  </div>
                   <div>
                     <Label>Deposit Due (days after booking)</Label>
                     <Input
@@ -332,66 +364,200 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        {/* Quote Templates Tab */}
-        <TabsContent value="quotes">
+        {/* Main Packages Tab */}
+        <TabsContent value="packages">
           <Card className="bg-white border-border/40 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-display text-xl">Quote Templates</CardTitle>
+              <div>
+                <CardTitle className="font-display text-xl">Main Packages</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">Your core photography packages (Full Day, Half Day, etc.)</p>
+              </div>
               <Button
                 onClick={() => {
-                  setEditingQuote(null);
-                  setQuoteForm({ name: "", description: "", price: "", includes: "" });
-                  setShowQuoteModal(true);
+                  setEditingPackage(null);
+                  setPackageForm({ name: "", description: "", price: "", package_type: "main", includes: "", sort_order: 0 });
+                  setShowPackageModal(true);
                 }}
                 className="bg-gold hover:bg-gold/90"
-                data-testid="add-quote-template-btn"
+                data-testid="add-package-btn"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Template
+                Add Package
               </Button>
             </CardHeader>
             <CardContent>
-              {quoteTemplates.length > 0 ? (
+              {mainPackages.length > 0 ? (
                 <div className="space-y-4">
-                  {quoteTemplates.map((template, index) => (
+                  {mainPackages.map((pkg, index) => (
                     <div
-                      key={template.id}
+                      key={pkg.id}
                       className="flex items-center justify-between p-4 bg-bone rounded-sm"
-                      data-testid={`quote-template-item-${index}`}
+                      data-testid={`package-item-${index}`}
                     >
-                      <div>
-                        <h4 className="font-medium text-obsidian">{template.name}</h4>
-                        <p className="text-sm text-muted-foreground">{template.description}</p>
-                        <p className="text-sm text-gold font-display mt-1">£{template.price.toLocaleString()}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-medium text-obsidian">{pkg.name}</h4>
+                          <Badge className="bg-gold/10 text-gold border-gold/20">Main Package</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{pkg.description}</p>
+                        {pkg.includes?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {pkg.includes.slice(0, 3).map((item, i) => (
+                              <span key={i} className="text-xs bg-white px-2 py-1 rounded border border-border/40">
+                                {item}
+                              </span>
+                            ))}
+                            {pkg.includes.length > 3 && (
+                              <span className="text-xs text-muted-foreground">+{pkg.includes.length - 3} more</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEditQuote(template)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteQuoteTemplate(template.id)}
-                          className="text-red-500 hover:text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      <div className="flex items-center gap-4">
+                        <p className="font-display text-xl text-gold">£{pkg.price.toLocaleString()}</p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditPackage(pkg)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeletePackage(pkg.id)}
+                            className="text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                  <p className="text-muted-foreground">No quote templates yet</p>
+                  <Package className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">No packages yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Create packages like "Full Day Coverage", "Half Day", etc.</p>
                 </div>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Add-ons Tab */}
+        <TabsContent value="addons">
+          <Card className="bg-white border-border/40 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="font-display text-xl">Add-ons</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">Extra services couples can add to their package</p>
+              </div>
+              <Button
+                onClick={() => {
+                  setEditingPackage(null);
+                  setPackageForm({ name: "", description: "", price: "", package_type: "addon", includes: "", sort_order: 0 });
+                  setShowPackageModal(true);
+                }}
+                className="bg-sage hover:bg-sage/90 text-white"
+                data-testid="add-addon-btn"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Add-on
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {addons.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {addons.map((addon, index) => (
+                    <div
+                      key={addon.id}
+                      className="p-4 bg-bone rounded-sm"
+                      data-testid={`addon-item-${index}`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-medium text-obsidian">{addon.name}</h4>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEditPackage(addon)}
+                          >
+                            <FileText className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500"
+                            onClick={() => handleDeletePackage(addon.id)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">{addon.description}</p>
+                      <p className="font-display text-lg text-sage">£{addon.price.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Sparkles className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">No add-ons yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Create add-ons like "Extra Hour", "Selfie Booth", "Wedding Album", "Travel Charge"
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Suggested Add-ons */}
+          {addons.length === 0 && (
+            <Card className="bg-white border-border/40 shadow-sm mt-6">
+              <CardHeader>
+                <CardTitle className="font-display text-lg">Suggested Add-ons to Create</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { name: "Extra Hour", price: "150" },
+                    { name: "Selfie Booth", price: "300" },
+                    { name: "Wedding Album", price: "400" },
+                    { name: "Travel Charge", price: "50" },
+                    { name: "Engagement Shoot", price: "200" },
+                    { name: "Second Photographer", price: "500" },
+                    { name: "USB Drive", price: "75" },
+                    { name: "Canvas Print", price: "150" }
+                  ].map((suggestion, i) => (
+                    <Button
+                      key={i}
+                      variant="outline"
+                      className="justify-start h-auto py-3"
+                      onClick={() => {
+                        setEditingPackage(null);
+                        setPackageForm({
+                          name: suggestion.name,
+                          description: "",
+                          price: suggestion.price,
+                          package_type: "addon",
+                          includes: "",
+                          sort_order: i
+                        });
+                        setShowPackageModal(true);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      {suggestion.name}
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Contract Templates Tab */}
@@ -453,64 +619,83 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      {/* Quote Template Modal */}
-      <Dialog open={showQuoteModal} onOpenChange={setShowQuoteModal}>
+      {/* Package/Add-on Modal */}
+      <Dialog open={showPackageModal} onOpenChange={setShowPackageModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">
-              {editingQuote ? "Edit Quote Template" : "Add Quote Template"}
+              {editingPackage ? "Edit" : "Add"} {packageForm.package_type === "addon" ? "Add-on" : "Package"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
-              <Label>Package Name</Label>
+              <Label>Name</Label>
               <Input
-                value={quoteForm.name}
-                onChange={(e) => setQuoteForm({ ...quoteForm, name: e.target.value })}
-                placeholder="e.g., Full Day Coverage"
-                data-testid="quote-name-input"
+                value={packageForm.name}
+                onChange={(e) => setPackageForm({ ...packageForm, name: e.target.value })}
+                placeholder={packageForm.package_type === "addon" ? "e.g., Extra Hour" : "e.g., Full Day Coverage"}
+                data-testid="package-name-input"
               />
             </div>
             <div>
               <Label>Description</Label>
               <Textarea
-                value={quoteForm.description}
-                onChange={(e) => setQuoteForm({ ...quoteForm, description: e.target.value })}
-                placeholder="Brief description of the package"
-                data-testid="quote-description-input"
+                value={packageForm.description}
+                onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
+                placeholder="Brief description"
+                data-testid="package-description-input"
               />
             </div>
-            <div>
-              <Label>Price (£)</Label>
-              <Input
-                type="number"
-                value={quoteForm.price}
-                onChange={(e) => setQuoteForm({ ...quoteForm, price: e.target.value })}
-                placeholder="1500"
-                data-testid="quote-price-input"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Price (£)</Label>
+                <Input
+                  type="number"
+                  value={packageForm.price}
+                  onChange={(e) => setPackageForm({ ...packageForm, price: e.target.value })}
+                  placeholder="1500"
+                  data-testid="package-price-input"
+                />
+              </div>
+              <div>
+                <Label>Type</Label>
+                <Select 
+                  value={packageForm.package_type} 
+                  onValueChange={(v) => setPackageForm({ ...packageForm, package_type: v })}
+                >
+                  <SelectTrigger data-testid="package-type-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="main">Main Package</SelectItem>
+                    <SelectItem value="addon">Add-on</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>What's Included (one per line)</Label>
-              <Textarea
-                value={quoteForm.includes}
-                onChange={(e) => setQuoteForm({ ...quoteForm, includes: e.target.value })}
-                placeholder="8 hours coverage&#10;500+ edited photos&#10;Online gallery&#10;USB drive"
-                rows={5}
-                data-testid="quote-includes-input"
-              />
-            </div>
+            {packageForm.package_type === "main" && (
+              <div>
+                <Label>What's Included (one per line)</Label>
+                <Textarea
+                  value={packageForm.includes}
+                  onChange={(e) => setPackageForm({ ...packageForm, includes: e.target.value })}
+                  placeholder="8 hours coverage&#10;500+ edited photos&#10;Online gallery&#10;USB drive"
+                  rows={5}
+                  data-testid="package-includes-input"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuoteModal(false)}>
+            <Button variant="outline" onClick={() => setShowPackageModal(false)}>
               Cancel
             </Button>
             <Button
-              onClick={handleSaveQuoteTemplate}
+              onClick={handleSavePackage}
               className="bg-obsidian hover:bg-obsidian/90"
-              data-testid="save-quote-template-btn"
+              data-testid="save-package-btn"
             >
-              {editingQuote ? "Update" : "Create"} Template
+              {editingPackage ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
