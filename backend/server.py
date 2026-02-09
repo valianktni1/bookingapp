@@ -1006,7 +1006,9 @@ async def get_client_portal(portal_token: str):
 @api_router.post("/enquiry", response_model=Lead)
 async def submit_enquiry(enquiry: LeadCreate):
     """Public endpoint for website enquiry form"""
-    lead = Lead(**enquiry.model_dump(), source="website")
+    lead_data = enquiry.model_dump()
+    lead_data['source'] = "website"  # Override source for public enquiries
+    lead = Lead(**lead_data)
     doc = lead.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
