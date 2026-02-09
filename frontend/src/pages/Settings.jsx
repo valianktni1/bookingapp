@@ -167,6 +167,45 @@ export default function Settings() {
     }
   };
 
+  const handleSaveEmailTemplate = async () => {
+    try {
+      const data = {
+        name: emailTemplateForm.name,
+        subject: emailTemplateForm.subject,
+        body: emailTemplateForm.body
+      };
+
+      if (editingEmailTemplate) {
+        await axios.put(`${API}/email-templates/${editingEmailTemplate.id}`, data);
+        toast.success("Email template updated");
+      } else {
+        await axios.post(`${API}/email-templates`, data);
+        toast.success("Email template created");
+      }
+
+      setShowEmailTemplateModal(false);
+      setEditingEmailTemplate(null);
+      setEmailTemplateForm({ name: "", subject: "", body: "" });
+      fetchData();
+    } catch (error) {
+      console.error("Error saving email template:", error);
+      toast.error("Failed to save email template");
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      await axios.post(`${API}/settings/test-email`);
+      toast.success("Test email sent! Check your inbox.");
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      toast.error(error.response?.data?.detail || "Failed to send test email. Check your SMTP settings.");
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
   const handleDeletePackage = async (id) => {
     if (!window.confirm("Are you sure you want to delete this package?")) return;
     try {
@@ -199,6 +238,16 @@ export default function Settings() {
       content: template.content
     });
     setShowContractModal(true);
+  };
+
+  const openEditEmailTemplate = (template) => {
+    setEditingEmailTemplate(template);
+    setEmailTemplateForm({
+      name: template.name,
+      subject: template.subject,
+      body: template.body
+    });
+    setShowEmailTemplateModal(true);
   };
 
   const mainPackages = packages.filter(p => p.package_type === "main");
