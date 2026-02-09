@@ -172,7 +172,8 @@ export default function Invoices() {
         deposit_percentage: editingInvoice.deposit_percentage,
         deposit_due_date: editingInvoice.deposit_due_date,
         balance_due_date: editingInvoice.balance_due_date,
-        notes: editingInvoice.notes
+        notes: editingInvoice.notes,
+        sync_to_accounts: editingInvoice.sync_to_accounts
       });
       
       toast.success("Invoice updated successfully");
