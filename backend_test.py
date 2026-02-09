@@ -428,8 +428,8 @@ Signed: ___________________ Date: ___________
 
     def run_all_tests(self):
         """Run all backend API tests"""
-        print("🚀 Starting Wedding CRM Backend API Tests")
-        print("=" * 50)
+        print("🚀 Starting Wedding CRM Backend API Tests - Package System & Invoice Editing")
+        print("=" * 70)
         
         # Basic API tests
         self.test_api_root()
@@ -443,30 +443,40 @@ Signed: ___________________ Date: ___________
         self.test_create_lead()
         self.test_get_leads()
         
-        # Template tests
-        self.test_create_quote_template()
-        self.test_get_quote_templates()
+        # NEW: Package system tests
+        self.test_create_main_package()
+        self.test_create_addons()
+        self.test_get_packages_by_type()
+        
+        # Contract template test (needed for job creation)
         self.test_create_contract_template()
         self.test_get_contract_templates()
         
-        # Quote workflow tests
-        self.test_send_quote()
+        # NEW: Quote workflow with packages
+        self.test_send_quote_with_packages()
         self.test_get_quotes()
-        self.test_accept_quote()
+        
+        # NEW: Job creation with detailed invoice
+        self.test_accept_quote_creates_invoice()
         
         # Job and related data tests
         self.test_get_jobs()
         self.test_get_invoices()
         self.test_get_contracts()
         
-        # Client portal test
-        self.test_client_portal()
+        # NEW: Invoice editing functionality
+        self.test_invoice_edit_add_item()
+        self.test_invoice_edit_update_items()
+        self.test_invoice_edit_remove_item()
+        
+        # NEW: Client portal with updated invoice
+        self.test_client_portal_updated_invoice()
         
         # Public enquiry test
         self.test_enquiry_form()
         
         # Print summary
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 70)
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
         
         if self.tests_passed == self.tests_run:
