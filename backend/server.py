@@ -692,7 +692,6 @@ async def accept_quote_create_job(quote_id: str, contract_template_id: str):
         discount=quote.get('discount', 0),
         discount_note=quote.get('discount_note'),
         total_amount=quote['total'],
-        deposit_percentage=deposit_pct,
         deposit_amount=deposit_amount,
         deposit_due_date=deposit_due,
         balance_amount=quote['total'] - deposit_amount,
