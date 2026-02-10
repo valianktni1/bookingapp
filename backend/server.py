@@ -242,6 +242,31 @@ class ContractTemplateCreate(BaseModel):
     name: str
     content: str
 
+# Booking Form Models
+class BookingFormField(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    label: str
+    field_type: str = "text"  # text, textarea, date, time, select, checkbox
+    required: bool = True
+    options: List[str] = []  # For select fields
+    placeholder: str = ""
+
+class BookingFormTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "Default Booking Form"
+    fields: List[BookingFormField] = []
+    intro_text: str = "Please fill in the details below to help us prepare for your special day."
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BookingFormResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    responses: dict = {}  # {field_id: response_value}
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # Job Models
 class Job(BaseModel):
     model_config = ConfigDict(extra="ignore")
