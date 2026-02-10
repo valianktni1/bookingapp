@@ -128,15 +128,27 @@ export default function QuoteView() {
   const discount = quote.discount || 0;
   const finalTotal = Math.max(0, total - (total > 0 ? discount : 0));
 
-  // Parse includes from string to array if needed
+  // Parse includes from string to array if needed - handles * bullet points
   const parseIncludes = (item) => {
     if (item.includes && Array.isArray(item.includes)) {
-      return item.includes;
+      // Handle array - each item might have * prefix
+      return item.includes.map(i => i.replace(/^\*\s*/, '').trim()).filter(i => i);
     }
     if (item.includes && typeof item.includes === 'string') {
-      return item.includes.split('\n').filter(i => i.trim());
+      // Split by newline and handle * bullet points
+      return item.includes
+        .split('\n')
+        .map(i => i.replace(/^\*\s*/, '').trim())
+        .filter(i => i);
     }
     if (item.description) {
+      // Split description by * if it contains them
+      if (item.description.includes('*')) {
+        return item.description
+          .split('*')
+          .map(i => i.trim())
+          .filter(i => i);
+      }
       return [item.description];
     }
     return [];
