@@ -45,6 +45,7 @@ export default function Settings() {
   const [packages, setPackages] = useState([]);
   const [contractTemplates, setContractTemplates] = useState([]);
   const [emailTemplates, setEmailTemplates] = useState([]);
+  const [bookingFormTemplate, setBookingFormTemplate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
@@ -53,6 +54,7 @@ export default function Settings() {
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showEmailTemplateModal, setShowEmailTemplateModal] = useState(false);
+  const [showBookingFieldModal, setShowBookingFieldModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [editingContract, setEditingContract] = useState(null);
   const [editingEmailTemplate, setEditingEmailTemplate] = useState(null);
@@ -75,6 +77,12 @@ export default function Settings() {
     subject: "",
     body: ""
   });
+  const [bookingFieldForm, setBookingFieldForm] = useState({
+    label: "",
+    field_type: "text",
+    required: true,
+    placeholder: ""
+  });
 
   useEffect(() => {
     fetchData();
@@ -82,11 +90,12 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, packagesRes, contractsRes, emailTemplatesRes] = await Promise.all([
+      const [settingsRes, packagesRes, contractsRes, emailTemplatesRes, bookingFormRes] = await Promise.all([
         axios.get(`${API}/settings`),
         axios.get(`${API}/packages?active_only=false`),
         axios.get(`${API}/contract-templates?active_only=false`),
-        axios.get(`${API}/email-templates`)
+        axios.get(`${API}/email-templates`),
+        axios.get(`${API}/booking-form-template`)
       ]);
       
       setSettings(settingsRes.data);
