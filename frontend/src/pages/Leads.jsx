@@ -161,11 +161,19 @@ export default function Leads() {
     }
   };
 
-  const openQuoteBuilder = (lead) => {
+  const openQuoteBuilder = async (lead) => {
     setSelectedLead(lead);
-    setSelectedPackages([]);
-    setSelectedAddons({});
-    setAddonQuantities({});
+    // Auto-select ALL packages and addons so client can choose
+    const allPackageIds = packages.filter(p => p.package_type === "main").map(p => p.id);
+    const allAddonSelections = {};
+    const allAddonQtys = {};
+    packages.filter(p => p.package_type === "addon").forEach(p => {
+      allAddonSelections[p.id] = true;
+      allAddonQtys[p.id] = 1;
+    });
+    setSelectedPackages(allPackageIds);
+    setSelectedAddons(allAddonSelections);
+    setAddonQuantities(allAddonQtys);
     setQuoteDiscount(0);
     setDiscountNote("");
     setCustomMessage("");
@@ -223,7 +231,7 @@ export default function Leads() {
     };
   };
 
-  const handleSendQuote = async () => {
+  const handleSendQuote = async (sendEmail = false) => {
     const selectedPkgIds = [...selectedPackages];
     const selectedAddonIds = Object.keys(selectedAddons).filter(id => selectedAddons[id]);
     
@@ -239,7 +247,8 @@ export default function Leads() {
     });
 
     try {
-      await axios.post(`${API}/quotes`, {
+      // Create the quote
+      const quoteResponse = await axios.post(`${API}/quotes`, {
         lead_id: selectedLead.id,
         package_ids: allIds,
         quantities,
@@ -248,13 +257,28 @@ export default function Leads() {
         custom_message: customMessage || null,
         valid_days: 14
       });
-      toast.success("Quote sent successfully");
+      
+      const quoteId = quoteResponse.data.id;
+      
+      // Send email if requested
+      if (sendEmail) {
+        try {
+          await axios.post(`${API}/quotes/${quoteId}/send-email`);
+          toast.success(`Quote created and email sent to ${selectedLead.email}`);
+        } catch (emailError) {
+          console.error("Error sending email:", emailError);
+          toast.warning("Quote created but email failed to send. Check your SMTP settings.");
+        }
+      } else {
+        toast.success("Quote created successfully");
+      }
+      
       setShowQuoteModal(false);
       setSelectedLead(null);
       fetchLeads();
     } catch (error) {
       console.error("Error sending quote:", error);
-      toast.error("Failed to send quote");
+      toast.error("Failed to create quote");
     }
   };
 
@@ -727,18 +751,26 @@ export default function Leads() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowQuoteModal(false)}>
               Cancel
             </Button>
             <Button
-              onClick={handleSendQuote}
+              onClick={() => handleSendQuote(false)}
+              disabled={selectedPackages.length === 0 && Object.values(selectedAddons).every(v => !v)}
+              variant="outline"
+              data-testid="save-quote-btn"
+            >
+              Save Quote Only
+            </Button>
+            <Button
+              onClick={() => handleSendQuote(true)}
               disabled={selectedPackages.length === 0 && Object.values(selectedAddons).every(v => !v)}
               className="bg-gold hover:bg-gold/90"
-              data-testid="send-quote-btn"
+              data-testid="send-quote-email-btn"
             >
-              <Send className="w-4 h-4 mr-2" />
-              Send Quote
+              <Mail className="w-4 h-4 mr-2" />
+              Save & Send Email
             </Button>
           </DialogFooter>
         </DialogContent>

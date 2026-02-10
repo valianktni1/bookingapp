@@ -10,6 +10,9 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 from enum import Enum
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -60,9 +63,18 @@ class PackageType(str, Enum):
 
 # Business Settings
 class BankDetails(BaseModel):
-    account_name: str = "Weddings By Mark"
-    sort_code: str = ""
-    account_number: str = ""
+    account_name: str = "Mark Powell (Tide Sole Trader Business Account)"
+    sort_code: str = "04-06-05"
+    account_number: str = "20315075"
+
+class SMTPSettings(BaseModel):
+    host: str = ""
+    port: int = 587
+    username: str = ""
+    password: str = ""
+    from_email: str = ""
+    from_name: str = "Weddings By Mark"
+    use_tls: bool = True
 
 class BusinessSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -74,6 +86,7 @@ class BusinessSettings(BaseModel):
     website: str = "perfectweddingsbymark.uk"
     logo_url: str = "https://customer-assets.emergentagent.com/job_f11e6de5-8f7d-4dd0-865f-7fe908506ea0/artifacts/7bs8gr7j_new%20logo%202022%20White%20with%20bevel.png"
     bank_details: BankDetails = Field(default_factory=BankDetails)
+    smtp_settings: SMTPSettings = Field(default_factory=SMTPSettings)
     deposit_days: int = 1
     deposit_amount: float = 100.0  # Fixed £ deposit amount (e.g., £100)
     balance_days_before: int = 45
@@ -86,6 +99,7 @@ class BusinessSettingsUpdate(BaseModel):
     website: Optional[str] = None
     logo_url: Optional[str] = None
     bank_details: Optional[BankDetails] = None
+    smtp_settings: Optional[SMTPSettings] = None
     deposit_days: Optional[int] = None
     deposit_amount: Optional[float] = None  # Fixed £ deposit amount
     balance_days_before: Optional[int] = None
@@ -164,6 +178,7 @@ class QuoteItem(BaseModel):
     price: float
     package_type: str
     quantity: int = 1
+    includes: List[str] = []  # What's included in this package
 
 class Quote(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -188,6 +203,32 @@ class QuoteSend(BaseModel):
     custom_message: Optional[str] = None
     valid_days: int = 14
 
+# Email Template Models
+class EmailTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "quote_email", "payment_reminder"
+    subject: str
+    body: str
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class EmailTemplateCreate(BaseModel):
+    name: str
+    subject: str
+    body: str
+
+class EmailTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class SendQuoteEmail(BaseModel):
+    lead_id: str
+    quote_id: str
+    template_id: Optional[str] = None  # If not provided, use default quote template
+
 # Contract Template Models
 class ContractTemplate(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -200,6 +241,31 @@ class ContractTemplate(BaseModel):
 class ContractTemplateCreate(BaseModel):
     name: str
     content: str
+
+# Booking Form Models
+class BookingFormField(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    label: str
+    field_type: str = "text"  # text, textarea, date, time, select, checkbox
+    required: bool = True
+    options: List[str] = []  # For select fields
+    placeholder: str = ""
+
+class BookingFormTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "Default Booking Form"
+    fields: List[BookingFormField] = []
+    intro_text: str = "Please fill in the details below to help us prepare for your special day."
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BookingFormResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    job_id: str
+    responses: dict = {}  # {field_id: response_value}
+    submitted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Job Models
 class Job(BaseModel):
@@ -406,6 +472,119 @@ def recalculate_invoice(invoice_data, settings):
         'balance_amount': balance_amount
     }
 
+async def send_email(to_email: str, subject: str, body: str, settings: BusinessSettings):
+    """Send email via SMTP"""
+    smtp = settings.smtp_settings
+    if not smtp.host or not smtp.username or not smtp.password:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured. Please configure in Settings.")
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = f"{smtp.from_name} <{smtp.from_email or smtp.username}>"
+        msg['To'] = to_email
+        
+        # Create HTML version of the email
+        html_body = body.replace('\n', '<br>')
+        html_content = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Georgia, serif; line-height: 1.6; color: #333; }}
+                .quote-link {{ 
+                    display: inline-block; 
+                    background-color: #c9a962; 
+                    color: white !important; 
+                    padding: 15px 30px; 
+                    text-decoration: none; 
+                    font-weight: bold;
+                    margin: 20px 0;
+                }}
+                .bank-details {{
+                    background-color: #1a1a1a;
+                    color: white;
+                    padding: 20px;
+                    margin: 20px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            {html_body}
+        </body>
+        </html>
+        """
+        
+        # Attach both plain text and HTML versions
+        part1 = MIMEText(body, 'plain')
+        part2 = MIMEText(html_content, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Connect and send
+        if smtp.use_tls:
+            server = smtplib.SMTP(smtp.host, smtp.port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(smtp.host, smtp.port)
+        
+        server.login(smtp.username, smtp.password)
+        server.sendmail(smtp.from_email or smtp.username, to_email, msg.as_string())
+        server.quit()
+        
+        logger.info(f"Email sent successfully to {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+async def get_default_quote_template():
+    """Get or create the default quote email template"""
+    template = await db.email_templates.find_one({"name": "quote_email"}, {"_id": 0})
+    if not template:
+        default_template = EmailTemplate(
+            name="quote_email",
+            subject="Your Wedding Photography Quote from Weddings By Mark",
+            body="""Hi %client_name%,
+
+Thank you for considering Weddings By Mark to capture your special day. I am thrilled to let you know that I still have your date available, and I would be honoured to be a part of it.
+
+I understand that planning a wedding can be overwhelming, but I am here to make the photography part of it as easy and stress-free as possible.
+
+That's why I have put together a tailored quote specifically for your wedding date with all the packages available. You can view, choose, and accept this quote quickly and conveniently through my online booking system.
+
+<a href="%quote_link%" class="quote-link">VIEW YOUR FULL QUOTE HERE</a>
+
+*Please Note* If you are happy and go ahead with the quote :) All payment details are at the bottom of this email :)
+
+But why should you choose Weddings By Mark? Because I believe that your wedding day is just as important to me as it is to you. I am committed to creating timeless images that will become cherished memories for years to come. With my expertise, creativity, and attention to detail, you can rest assured that every precious moment will be captured beautifully.
+
+I am more than happy to answer any questions you may have or provide additional information. Simply drop me a message or give me a call at %phone%, and I will be delighted to help.
+
+Lastly, I would like to take this opportunity to wish you both all the very best for your upcoming wedding day and your future together.
+
+Remember, your quote is valid for seven days from the date of this email, and your booking and wedding/event date will only be secured upon the payment of a £%deposit_amount% deposit.
+
+<div class="bank-details">
+<strong>Bank Transfer Details:</strong><br>
+Sort Code: %sort_code%<br>
+Account No: %account_number%<br>
+Account Name: %account_name%
+</div>
+
+Don't miss out on this opportunity to have your dream wedding photography captured by Weddings By Mark. I look forward to hearing from you soon and being a part of your special day.
+
+Best wishes,
+Mark
+Weddings By Mark
+%phone%
+%email%"""
+        )
+        doc = default_template.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.email_templates.insert_one(doc)
+        return default_template
+    return EmailTemplate(**template)
+
 # ============== API ROUTES ==============
 
 @api_router.get("/")
@@ -424,9 +603,60 @@ async def update_business_settings(update: BusinessSettingsUpdate):
     if update_data:
         if 'bank_details' in update_data:
             update_data['bank_details'] = update_data['bank_details'].model_dump() if hasattr(update_data['bank_details'], 'model_dump') else update_data['bank_details']
+        if 'smtp_settings' in update_data:
+            update_data['smtp_settings'] = update_data['smtp_settings'].model_dump() if hasattr(update_data['smtp_settings'], 'model_dump') else update_data['smtp_settings']
         await db.settings.update_one({"id": settings.id}, {"$set": update_data})
     updated = await db.settings.find_one({"id": settings.id}, {"_id": 0})
     return BusinessSettings(**updated)
+
+@api_router.post("/settings/test-email")
+async def test_email_settings():
+    """Test SMTP settings by sending a test email"""
+    settings = await get_settings()
+    if not settings.smtp_settings.host:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+    
+    await send_email(
+        to_email=settings.email,
+        subject="Test Email from Weddings By Mark CRM",
+        body="This is a test email to verify your SMTP settings are working correctly.\n\nIf you received this, your email settings are configured properly!",
+        settings=settings
+    )
+    return {"message": "Test email sent successfully"}
+
+# ---------- EMAIL TEMPLATES ----------
+@api_router.get("/email-templates", response_model=List[EmailTemplate])
+async def get_email_templates():
+    # Ensure default template exists
+    await get_default_quote_template()
+    templates = await db.email_templates.find({}, {"_id": 0}).to_list(100)
+    return [EmailTemplate(**serialize_doc(t)) for t in templates]
+
+@api_router.get("/email-templates/{template_id}", response_model=EmailTemplate)
+async def get_email_template(template_id: str):
+    template = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return EmailTemplate(**serialize_doc(template))
+
+@api_router.post("/email-templates", response_model=EmailTemplate)
+async def create_email_template(template: EmailTemplateCreate):
+    et = EmailTemplate(**template.model_dump())
+    doc = et.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.email_templates.insert_one(doc)
+    return et
+
+@api_router.put("/email-templates/{template_id}", response_model=EmailTemplate)
+async def update_email_template(template_id: str, update: EmailTemplateUpdate):
+    template = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if update_data:
+        await db.email_templates.update_one({"id": template_id}, {"$set": update_data})
+    updated = await db.email_templates.find_one({"id": template_id}, {"_id": 0})
+    return EmailTemplate(**serialize_doc(updated))
 
 # ---------- LEADS ----------
 @api_router.post("/leads", response_model=Lead)
@@ -541,7 +771,8 @@ async def send_quote(quote_data: QuoteSend):
                 description=package['description'],
                 price=package['price'],
                 package_type=package['package_type'],
-                quantity=quantity
+                quantity=quantity,
+                includes=package.get('includes', [])  # Include what's in the package
             ))
             subtotal += item_total
     
@@ -599,6 +830,368 @@ async def get_quote(quote_id: str):
         raise HTTPException(status_code=404, detail="Quote not found")
     return Quote(**serialize_doc(quote))
 
+@api_router.post("/quotes/{quote_id}/send-email")
+async def send_quote_email(quote_id: str, background_tasks: BackgroundTasks):
+    """Send quote email to lead"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    settings = await get_settings()
+    template = await get_default_quote_template()
+    
+    # Generate quote view token (use quote id for now)
+    quote_token = quote_id
+    
+    # Build the quote link - use frontend URL
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://booking.perfectweddingsbymark.uk')
+    quote_link = f"{frontend_url}/view-quote/{quote_token}"
+    
+    # Replace placeholders in template
+    body = template.body
+    body = body.replace('%client_name%', f"{lead['partner1_name']} & {lead['partner2_name']}")
+    body = body.replace('%partner1_name%', lead['partner1_name'])
+    body = body.replace('%partner2_name%', lead['partner2_name'])
+    body = body.replace('%wedding_date%', lead.get('wedding_date', 'TBC'))
+    body = body.replace('%quote_link%', quote_link)
+    body = body.replace('%phone%', settings.phone)
+    body = body.replace('%email%', settings.email)
+    body = body.replace('%deposit_amount%', str(int(settings.deposit_amount)))
+    body = body.replace('%sort_code%', settings.bank_details.sort_code)
+    body = body.replace('%account_number%', settings.bank_details.account_number)
+    body = body.replace('%account_name%', settings.bank_details.account_name)
+    
+    subject = template.subject
+    subject = subject.replace('%client_name%', f"{lead['partner1_name']} & {lead['partner2_name']}")
+    
+    # Send the email
+    await send_email(
+        to_email=lead['email'],
+        subject=subject,
+        body=body,
+        settings=settings
+    )
+    
+    # Update quote status
+    await db.quotes.update_one({"id": quote_id}, {"$set": {"status": "sent", "sent_at": datetime.now(timezone.utc).isoformat()}})
+    
+    # Update lead status
+    await db.leads.update_one(
+        {"id": lead['id']},
+        {"$set": {"status": LeadStatus.QUOTE_SENT.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    logger.info(f"Quote email sent to {lead['email']} for quote {quote_id}")
+    return {"message": "Quote email sent successfully", "sent_to": lead['email']}
+
+# ---------- PUBLIC QUOTE VIEW ----------
+@api_router.get("/public/quote/{quote_id}")
+async def get_public_quote(quote_id: str):
+    """Public endpoint for clients to view their quote"""
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    settings = await get_settings()
+    
+    # Get all active packages for display
+    packages = await db.packages.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    packages_map = {p['id']: p for p in packages}
+    
+    # Enrich quote items with package includes (in case they weren't saved originally)
+    enriched_items = []
+    for item in quote.get('items', []):
+        pkg_id = item.get('package_id')
+        pkg = packages_map.get(pkg_id, {})
+        enriched_item = {
+            **item,
+            'includes': item.get('includes') or pkg.get('includes', [])
+        }
+        enriched_items.append(enriched_item)
+    
+    quote['items'] = enriched_items
+    
+    return {
+        "quote": quote,
+        "lead": {
+            "partner1_name": lead['partner1_name'],
+            "partner2_name": lead['partner2_name'],
+            "email": lead['email'],
+            "wedding_date": lead.get('wedding_date'),
+            "venue": lead.get('venue')
+        },
+        "packages": [Package(**serialize_doc(p)).model_dump() for p in packages],
+        "business": {
+            "name": settings.business_name,
+            "address": settings.address,
+            "phone": settings.phone,
+            "email": settings.email,
+            "website": settings.website,
+            "logo_url": settings.logo_url,
+            "bank_details": settings.bank_details.model_dump(),
+            "deposit_amount": settings.deposit_amount
+        },
+        "valid_until": quote.get('valid_until')
+    }
+
+@api_router.post("/public/quote/{quote_id}/accept")
+async def accept_public_quote(quote_id: str, body: dict):
+    """Client accepts quote - creates job, invoice, contract and sends emails"""
+    selected_packages = body.get('selected_packages', [])
+    
+    quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    if quote.get('status') == 'accepted':
+        raise HTTPException(status_code=400, detail="Quote has already been accepted")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    settings = await get_settings()
+    
+    # Update quote with selected packages
+    selected_items = [item for item in quote.get('items', []) if item.get('package_id') in selected_packages]
+    if not selected_items:
+        raise HTTPException(status_code=400, detail="Please select at least one package")
+    
+    # Calculate totals
+    new_subtotal = sum(item['price'] * item.get('quantity', 1) for item in selected_items)
+    discount = quote.get('discount', 0)
+    new_total = new_subtotal - discount
+    
+    # Update quote status
+    await db.quotes.update_one(
+        {"id": quote_id},
+        {"$set": {
+            "selected_items": selected_items,
+            "selected_subtotal": new_subtotal,
+            "selected_total": new_total,
+            "status": "accepted",
+            "accepted_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Create package summary for job
+    package_summary = ", ".join([f"{item['name']}" + (f" x{item['quantity']}" if item.get('quantity', 1) > 1 else "") for item in selected_items])
+    
+    # Create the Job
+    job = Job(
+        lead_id=lead['id'],
+        quote_id=quote_id,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        phone=lead.get('phone', ''),
+        wedding_date=lead.get('wedding_date', ''),
+        venue=lead.get('venue'),
+        package_summary=package_summary,
+        package_price=new_total
+    )
+    job_doc = job.model_dump()
+    job_doc['created_at'] = job_doc['created_at'].isoformat()
+    await db.jobs.insert_one(job_doc)
+    
+    # Create Invoice
+    line_items = []
+    for item in selected_items:
+        qty = item.get('quantity', 1)
+        line_items.append(InvoiceLineItem(
+            description=item['name'],
+            quantity=qty,
+            unit_price=item['price'],
+            amount=item['price'] * qty
+        ).model_dump())
+    
+    # Add discount as negative line item if applicable
+    if discount > 0:
+        line_items.append(InvoiceLineItem(
+            description=f"Discount{' - ' + quote.get('discount_note') if quote.get('discount_note') else ''}",
+            quantity=1,
+            unit_price=-discount,
+            amount=-discount
+        ).model_dump())
+    
+    # Calculate dates
+    wedding_date = datetime.strptime(lead.get('wedding_date', datetime.now(timezone.utc).strftime('%Y-%m-%d')), '%Y-%m-%d') if lead.get('wedding_date') else datetime.now(timezone.utc)
+    deposit_due = (datetime.now(timezone.utc) + timedelta(days=settings.deposit_days)).strftime('%Y-%m-%d')
+    balance_due = (wedding_date - timedelta(days=settings.balance_days_before)).strftime('%Y-%m-%d')
+    
+    # Invoice number
+    count = await db.invoices.count_documents({})
+    invoice_number = f"WBM-{datetime.now().year}-{str(count + 1).zfill(4)}"
+    
+    invoice = Invoice(
+        job_id=job.id,
+        invoice_number=invoice_number,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        wedding_date=lead.get('wedding_date', ''),
+        line_items=line_items,
+        subtotal=new_subtotal,
+        discount=discount,
+        total_amount=new_total,
+        deposit_amount=settings.deposit_amount,
+        balance_amount=new_total - settings.deposit_amount,
+        deposit_due_date=deposit_due,
+        balance_due_date=balance_due,
+        status="pending",
+        sync_to_accounts=False
+    )
+    invoice_doc = invoice.model_dump()
+    invoice_doc['created_at'] = invoice_doc['created_at'].isoformat()
+    await db.invoices.insert_one(invoice_doc)
+    
+    # Update job with invoice ID
+    await db.jobs.update_one({"id": job.id}, {"$set": {"invoice_id": invoice.id}})
+    
+    # Create Contract from first active template
+    contract_template = await db.contract_templates.find_one({"is_active": True}, {"_id": 0})
+    contract_id = None
+    if contract_template:
+        # Replace placeholders in contract
+        contract_content = contract_template['content']
+        contract_content = contract_content.replace('{{partner1_name}}', lead['partner1_name'])
+        contract_content = contract_content.replace('{{partner2_name}}', lead['partner2_name'])
+        contract_content = contract_content.replace('{{wedding_date}}', lead.get('wedding_date', 'TBC'))
+        contract_content = contract_content.replace('{{package_name}}', package_summary)
+        contract_content = contract_content.replace('{{package_price}}', f"£{new_total:,.2f}")
+        contract_content = contract_content.replace('{{deposit_amount}}', f"£{settings.deposit_amount:,.2f}")
+        contract_content = contract_content.replace('{{balance_amount}}', f"£{new_total - settings.deposit_amount:,.2f}")
+        contract_content = contract_content.replace('{{venue}}', lead.get('venue', 'TBC'))
+        
+        contract_doc = {
+            "id": str(uuid.uuid4()),
+            "job_id": job.id,
+            "template_id": contract_template['id'],
+            "content": contract_content,
+            "status": "pending_signature",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.contracts.insert_one(contract_doc)
+        contract_id = contract_doc['id']
+        await db.jobs.update_one({"id": job.id}, {"$set": {"contract_id": contract_id}})
+    
+    # Update lead status
+    await db.leads.update_one(
+        {"id": lead['id']},
+        {"$set": {"status": LeadStatus.BOOKED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Build portal URL
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://booking.perfectweddingsbymark.uk')
+    portal_url = f"{frontend_url}/portal/{job.portal_token}"
+    
+    # Build items list for emails
+    items_list = "\n".join([f"  • {item['name']} - £{item['price'] * item.get('quantity', 1):,.2f}" for item in selected_items])
+    
+    # ============ EMAIL TO MARK (Notification) ============
+    notification_body = f"""🎉 NEW BOOKING ALERT! 🎉
+
+{lead['partner1_name']} & {lead['partner2_name']} have accepted their quote and booked you for their wedding!
+
+Wedding Date: {lead.get('wedding_date', 'TBC')}
+Venue: {lead.get('venue', 'TBC')}
+Email: {lead['email']}
+Phone: {lead.get('phone', 'Not provided')}
+
+Selected Package(s):
+{items_list}
+
+Subtotal: £{new_subtotal:,.2f}
+Discount: -£{discount:,.2f}
+Total: £{new_total:,.2f}
+
+Deposit Due: £{settings.deposit_amount:,.2f} by {deposit_due}
+Balance Due: £{new_total - settings.deposit_amount:,.2f} by {balance_due}
+
+---
+Job, Invoice, and Contract have been automatically created.
+Log in to your CRM to view the details.
+"""
+    
+    try:
+        await send_email(
+            to_email=settings.email,
+            subject=f"🎉 NEW BOOKING: {lead['partner1_name']} & {lead['partner2_name']}",
+            body=notification_body,
+            settings=settings
+        )
+        logger.info(f"Booking notification sent to {settings.email}")
+    except Exception as e:
+        logger.error(f"Failed to send booking notification to Mark: {str(e)}")
+    
+    # ============ EMAIL TO CLIENT (Booking Confirmation + Portal Link) ============
+    client_body = f"""Dear {lead['partner1_name']} & {lead['partner2_name']},
+
+Thank you so much for booking Weddings By Mark for your wedding photography! I'm absolutely thrilled to be a part of your special day.
+
+Here's a summary of your booking:
+
+Wedding Date: {lead.get('wedding_date', 'TBC')}
+Venue: {lead.get('venue', 'TBC')}
+
+Your Package:
+{items_list}
+
+Total: £{new_total:,.2f}
+
+Payment Schedule:
+  • Deposit: £{settings.deposit_amount:,.2f} - due by {deposit_due}
+  • Balance: £{new_total - settings.deposit_amount:,.2f} - due by {balance_due}
+
+Bank Transfer Details:
+  Sort Code: {settings.bank_details.sort_code}
+  Account Number: {settings.bank_details.account_number}
+  Account Name: {settings.bank_details.account_name}
+  Reference: {lead['partner1_name']} & {lead['partner2_name']}
+
+YOUR CLIENT PORTAL
+
+You can access your personal portal to view your invoice, contract, and fill out your booking form:
+
+{portal_url}
+
+Please sign your contract in the portal to confirm your booking.
+
+If you have any questions at all, please don't hesitate to get in touch. I can't wait to capture your beautiful wedding day!
+
+Best wishes,
+Mark
+{settings.business_name}
+{settings.phone}
+{settings.email}
+"""
+    
+    try:
+        await send_email(
+            to_email=lead['email'],
+            subject=f"Booking Confirmed! Welcome to {settings.business_name} 💍",
+            body=client_body,
+            settings=settings
+        )
+        logger.info(f"Booking confirmation sent to client: {lead['email']}")
+    except Exception as e:
+        logger.error(f"Failed to send booking confirmation to client: {str(e)}")
+    
+    return {
+        "message": "Quote accepted! Check your email for your booking confirmation and portal access.",
+        "success": True,
+        "portal_url": portal_url,
+        "job_id": job.id
+    }
+
 # ---------- CONTRACT TEMPLATES ----------
 @api_router.post("/contract-templates", response_model=ContractTemplate)
 async def create_contract_template(template: ContractTemplateCreate):
@@ -622,6 +1215,265 @@ async def update_contract_template(template_id: str, template: ContractTemplateC
     await db.contract_templates.update_one({"id": template_id}, {"$set": template.model_dump()})
     updated = await db.contract_templates.find_one({"id": template_id}, {"_id": 0})
     return ContractTemplate(**serialize_doc(updated))
+
+# ---------- BOOKING FORM TEMPLATES ----------
+@api_router.get("/booking-form-template")
+async def get_booking_form_template():
+    """Get the active booking form template"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        # Create default template with common wedding questions
+        default_fields = [
+            BookingFormField(
+                label="Ceremony Start Time",
+                field_type="time",
+                required=True,
+                placeholder="e.g., 14:00"
+            ),
+            BookingFormField(
+                label="Where will the bride/partner 1 be getting ready?",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Home address or hotel name"
+            ),
+            BookingFormField(
+                label="Where will the groom/partner 2 be getting ready?",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Home address or hotel name"
+            ),
+            BookingFormField(
+                label="Reception Venue (if different from ceremony)",
+                field_type="text",
+                required=False,
+                placeholder="Leave blank if same venue"
+            ),
+            BookingFormField(
+                label="Approximate number of guests",
+                field_type="text",
+                required=True,
+                placeholder="e.g., 80"
+            ),
+            BookingFormField(
+                label="Key family members to photograph (names & relationships)",
+                field_type="textarea",
+                required=True,
+                placeholder="e.g., John Smith (Father of Bride), Mary Smith (Mother of Bride)"
+            ),
+            BookingFormField(
+                label="Any special moments or requests to capture?",
+                field_type="textarea",
+                required=False,
+                placeholder="e.g., Surprise during speeches, first look, specific group shots"
+            ),
+            BookingFormField(
+                label="Will there be confetti? If so, when?",
+                field_type="text",
+                required=False,
+                placeholder="e.g., After ceremony outside church"
+            ),
+            BookingFormField(
+                label="Emergency contact name and number",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Best Man - John - 07xxx"
+            ),
+            BookingFormField(
+                label="Any dietary requirements for the photographer?",
+                field_type="text",
+                required=False,
+                placeholder="e.g., Vegetarian, allergies"
+            ),
+            BookingFormField(
+                label="Anything else I should know?",
+                field_type="textarea",
+                required=False,
+                placeholder="Any other details that might help me prepare"
+            ),
+        ]
+        
+        default_template = BookingFormTemplate(
+            name="Wedding Details Form",
+            fields=default_fields,
+            intro_text="Please fill in the details below to help me prepare for your special day. The more information you can provide, the better I can capture all your precious moments!"
+        )
+        doc = default_template.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        # Convert field objects to dicts
+        doc['fields'] = [f.model_dump() for f in default_fields]
+        await db.booking_form_templates.insert_one(doc)
+        template = doc
+    
+    return template
+
+@api_router.put("/booking-form-template")
+async def update_booking_form_template(template_data: dict):
+    """Update the booking form template"""
+    existing = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if existing:
+        await db.booking_form_templates.update_one(
+            {"id": existing['id']},
+            {"$set": {
+                "name": template_data.get('name', existing['name']),
+                "intro_text": template_data.get('intro_text', existing['intro_text']),
+                "fields": template_data.get('fields', existing['fields'])
+            }}
+        )
+    else:
+        # Create new
+        new_template = {
+            "id": str(uuid.uuid4()),
+            "name": template_data.get('name', 'Wedding Details Form'),
+            "intro_text": template_data.get('intro_text', ''),
+            "fields": template_data.get('fields', []),
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.booking_form_templates.insert_one(new_template)
+    
+    return await get_booking_form_template()
+
+@api_router.post("/booking-form-template/add-field")
+async def add_booking_form_field(field_data: dict):
+    """Add a new field to the booking form"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        await get_booking_form_template()  # Create default
+        template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    
+    new_field = {
+        "id": str(uuid.uuid4()),
+        "label": field_data.get('label', ''),
+        "field_type": field_data.get('field_type', 'text'),
+        "required": field_data.get('required', False),
+        "options": field_data.get('options', []),
+        "placeholder": field_data.get('placeholder', '')
+    }
+    
+    fields = template.get('fields', [])
+    fields.append(new_field)
+    
+    await db.booking_form_templates.update_one(
+        {"id": template['id']},
+        {"$set": {"fields": fields}}
+    )
+    
+    return await get_booking_form_template()
+
+@api_router.delete("/booking-form-template/field/{field_id}")
+async def delete_booking_form_field(field_id: str):
+    """Delete a field from the booking form"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="No booking form template found")
+    
+    fields = [f for f in template.get('fields', []) if f.get('id') != field_id]
+    
+    await db.booking_form_templates.update_one(
+        {"id": template['id']},
+        {"$set": {"fields": fields}}
+    )
+    
+    return await get_booking_form_template()
+
+# ---------- BOOKING FORM RESPONSES (Client Portal) ----------
+@api_router.get("/public/booking-form/{job_id}")
+async def get_booking_form_for_job(job_id: str):
+    """Get booking form for a specific job (client portal)"""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    template = await get_booking_form_template()
+    
+    # Check if already submitted
+    existing_response = await db.booking_form_responses.find_one({"job_id": job_id}, {"_id": 0})
+    
+    return {
+        "template": template,
+        "existing_response": existing_response,
+        "job": {
+            "partner1_name": job['partner1_name'],
+            "partner2_name": job['partner2_name'],
+            "wedding_date": job.get('wedding_date'),
+            "venue": job.get('venue')
+        }
+    }
+
+@api_router.post("/public/booking-form/{job_id}/submit")
+async def submit_booking_form(job_id: str, responses: dict):
+    """Submit booking form responses"""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if already submitted
+    existing = await db.booking_form_responses.find_one({"job_id": job_id}, {"_id": 0})
+    
+    if existing:
+        # Update existing
+        await db.booking_form_responses.update_one(
+            {"job_id": job_id},
+            {"$set": {
+                "responses": responses.get('responses', {}),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # Create new
+        form_response = BookingFormResponse(
+            job_id=job_id,
+            responses=responses.get('responses', {})
+        )
+        doc = form_response.model_dump()
+        doc['submitted_at'] = doc['submitted_at'].isoformat()
+        await db.booking_form_responses.insert_one(doc)
+        
+        # Update job to mark form as completed
+        await db.jobs.update_one(
+            {"id": job_id},
+            {"$set": {"booking_form_completed": True}}
+        )
+    
+    # Send notification email to Mark
+    settings = await get_settings()
+    
+    # Build responses summary
+    template = await get_booking_form_template()
+    fields_map = {f['id']: f['label'] for f in template.get('fields', [])}
+    
+    responses_text = "\n".join([
+        f"  • {fields_map.get(k, k)}: {v}" 
+        for k, v in responses.get('responses', {}).items() 
+        if v
+    ])
+    
+    notification_body = f"""📋 BOOKING FORM SUBMITTED
+
+{job['partner1_name']} & {job['partner2_name']} have filled out their booking form!
+
+Wedding Date: {job.get('wedding_date', 'TBC')}
+Venue: {job.get('venue', 'TBC')}
+
+Form Responses:
+{responses_text}
+
+---
+Log in to your CRM to view the full details.
+"""
+    
+    try:
+        await send_email(
+            to_email=settings.email,
+            subject=f"📋 Booking Form: {job['partner1_name']} & {job['partner2_name']}",
+            body=notification_body,
+            settings=settings
+        )
+        logger.info(f"Booking form notification sent to {settings.email}")
+    except Exception as e:
+        logger.error(f"Failed to send booking form notification: {str(e)}")
+    
+    return {"message": "Booking form submitted successfully!", "success": True}
 
 # ---------- JOBS ----------
 @api_router.post("/jobs/accept-quote/{quote_id}")
@@ -1023,7 +1875,10 @@ async def get_client_portal(portal_token: str):
     settings = await get_settings()
     invoice = await db.invoices.find_one({"id": job.get('invoice_id')}, {"_id": 0}) if job.get('invoice_id') else None
     contract = await db.contracts.find_one({"id": job.get('contract_id')}, {"_id": 0}) if job.get('contract_id') else None
-    booking_form = await db.booking_forms.find_one({"id": job.get('booking_form_id')}, {"_id": 0}) if job.get('booking_form_id') else None
+    
+    # Get booking form template and any existing responses
+    booking_form_template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    booking_form_response = await db.booking_form_responses.find_one({"job_id": job['id']}, {"_id": 0})
     
     return {
         "business": {
@@ -1038,7 +1893,8 @@ async def get_client_portal(portal_token: str):
         "job": Job(**serialize_doc(job)).model_dump() if job else None,
         "invoice": Invoice(**serialize_doc(invoice)).model_dump() if invoice else None,
         "contract": Contract(**serialize_doc(contract)).model_dump() if contract else None,
-        "booking_form": BookingForm(**serialize_doc(booking_form)).model_dump() if booking_form else None
+        "booking_form_template": booking_form_template,
+        "booking_form_response": booking_form_response
     }
 
 # ---------- PUBLIC ENQUIRY FORM ----------

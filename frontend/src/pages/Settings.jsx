@@ -8,7 +8,11 @@ import {
   FileSignature,
   Building2,
   Package,
-  Sparkles
+  Sparkles,
+  Mail,
+  Send,
+  TestTube,
+  Check
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -39,14 +44,20 @@ export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [packages, setPackages] = useState([]);
   const [contractTemplates, setContractTemplates] = useState([]);
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [bookingFormTemplate, setBookingFormTemplate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   // Modal states
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
+  const [showEmailTemplateModal, setShowEmailTemplateModal] = useState(false);
+  const [showBookingFieldModal, setShowBookingFieldModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [editingContract, setEditingContract] = useState(null);
+  const [editingEmailTemplate, setEditingEmailTemplate] = useState(null);
 
   // Form states
   const [packageForm, setPackageForm] = useState({
@@ -61,6 +72,17 @@ export default function Settings() {
     name: "",
     content: ""
   });
+  const [emailTemplateForm, setEmailTemplateForm] = useState({
+    name: "",
+    subject: "",
+    body: ""
+  });
+  const [bookingFieldForm, setBookingFieldForm] = useState({
+    label: "",
+    field_type: "text",
+    required: true,
+    placeholder: ""
+  });
 
   useEffect(() => {
     fetchData();
@@ -68,15 +90,19 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, packagesRes, contractsRes] = await Promise.all([
+      const [settingsRes, packagesRes, contractsRes, emailTemplatesRes, bookingFormRes] = await Promise.all([
         axios.get(`${API}/settings`),
         axios.get(`${API}/packages?active_only=false`),
-        axios.get(`${API}/contract-templates?active_only=false`)
+        axios.get(`${API}/contract-templates?active_only=false`),
+        axios.get(`${API}/email-templates`),
+        axios.get(`${API}/booking-form-template`)
       ]);
       
       setSettings(settingsRes.data);
       setPackages(packagesRes.data);
       setContractTemplates(contractsRes.data);
+      setEmailTemplates(emailTemplatesRes.data);
+      setBookingFormTemplate(bookingFormRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load settings");
@@ -152,6 +178,82 @@ export default function Settings() {
     }
   };
 
+  const handleSaveEmailTemplate = async () => {
+    try {
+      const data = {
+        name: emailTemplateForm.name,
+        subject: emailTemplateForm.subject,
+        body: emailTemplateForm.body
+      };
+
+      if (editingEmailTemplate) {
+        await axios.put(`${API}/email-templates/${editingEmailTemplate.id}`, data);
+        toast.success("Email template updated");
+      } else {
+        await axios.post(`${API}/email-templates`, data);
+        toast.success("Email template created");
+      }
+
+      setShowEmailTemplateModal(false);
+      setEditingEmailTemplate(null);
+      setEmailTemplateForm({ name: "", subject: "", body: "" });
+      fetchData();
+    } catch (error) {
+      console.error("Error saving email template:", error);
+      toast.error("Failed to save email template");
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      await axios.post(`${API}/settings/test-email`);
+      toast.success("Test email sent! Check your inbox.");
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      toast.error(error.response?.data?.detail || "Failed to send test email. Check your SMTP settings.");
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  const handleAddBookingField = async () => {
+    try {
+      await axios.post(`${API}/booking-form-template/add-field`, bookingFieldForm);
+      toast.success("Field added");
+      setShowBookingFieldModal(false);
+      setBookingFieldForm({ label: "", field_type: "text", required: true, placeholder: "" });
+      fetchData();
+    } catch (error) {
+      console.error("Error adding field:", error);
+      toast.error("Failed to add field");
+    }
+  };
+
+  const handleDeleteBookingField = async (fieldId) => {
+    if (!window.confirm("Delete this field?")) return;
+    try {
+      await axios.delete(`${API}/booking-form-template/field/${fieldId}`);
+      toast.success("Field deleted");
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting field:", error);
+      toast.error("Failed to delete field");
+    }
+  };
+
+  const handleSaveBookingFormIntro = async () => {
+    try {
+      await axios.put(`${API}/booking-form-template`, {
+        intro_text: bookingFormTemplate?.intro_text
+      });
+      toast.success("Intro text saved");
+    } catch (error) {
+      console.error("Error saving intro:", error);
+      toast.error("Failed to save");
+    }
+  };
+
   const handleDeletePackage = async (id) => {
     if (!window.confirm("Are you sure you want to delete this package?")) return;
     try {
@@ -186,6 +288,16 @@ export default function Settings() {
     setShowContractModal(true);
   };
 
+  const openEditEmailTemplate = (template) => {
+    setEditingEmailTemplate(template);
+    setEmailTemplateForm({
+      name: template.name,
+      subject: template.subject,
+      body: template.body
+    });
+    setShowEmailTemplateModal(true);
+  };
+
   const mainPackages = packages.filter(p => p.package_type === "main");
   const addons = packages.filter(p => p.package_type === "addon");
 
@@ -206,10 +318,14 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="business" className="space-y-6">
-        <TabsList className="bg-white border border-border/40">
+        <TabsList className="bg-white border border-border/40 flex-wrap">
           <TabsTrigger value="business" data-testid="tab-business">
             <Building2 className="w-4 h-4 mr-2" />
             Business Info
+          </TabsTrigger>
+          <TabsTrigger value="email" data-testid="tab-email">
+            <Mail className="w-4 h-4 mr-2" />
+            Email Settings
           </TabsTrigger>
           <TabsTrigger value="packages" data-testid="tab-packages">
             <Package className="w-4 h-4 mr-2" />
@@ -222,6 +338,10 @@ export default function Settings() {
           <TabsTrigger value="contracts" data-testid="tab-contracts">
             <FileSignature className="w-4 h-4 mr-2" />
             Contracts
+          </TabsTrigger>
+          <TabsTrigger value="bookingform" data-testid="tab-bookingform">
+            <FileText className="w-4 h-4 mr-2" />
+            Booking Form
           </TabsTrigger>
         </TabsList>
 
@@ -388,6 +508,209 @@ export default function Settings() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Email Settings Tab */}
+        <TabsContent value="email">
+          <div className="space-y-6">
+            {/* SMTP Settings Card */}
+            <Card className="bg-white border-border/40 shadow-sm">
+              <CardHeader>
+                <CardTitle className="font-display text-xl">SMTP Settings</CardTitle>
+                <p className="text-sm text-muted-foreground">Configure your email server to send quotes and notifications</p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label>SMTP Host</Label>
+                    <Input
+                      value={settings?.smtp_settings?.host || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, host: e.target.value }
+                      })}
+                      placeholder="smtp.hostinger.com"
+                      data-testid="smtp-host-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>SMTP Port</Label>
+                    <Input
+                      type="number"
+                      value={settings?.smtp_settings?.port || 587}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, port: parseInt(e.target.value) }
+                      })}
+                      placeholder="587"
+                      data-testid="smtp-port-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>Username / Email</Label>
+                    <Input
+                      value={settings?.smtp_settings?.username || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, username: e.target.value }
+                      })}
+                      placeholder="mark@perfectweddingsbymark.uk"
+                      data-testid="smtp-username-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>Password</Label>
+                    <Input
+                      type="password"
+                      value={settings?.smtp_settings?.password || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, password: e.target.value }
+                      })}
+                      placeholder="••••••••"
+                      data-testid="smtp-password-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>From Email</Label>
+                    <Input
+                      value={settings?.smtp_settings?.from_email || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, from_email: e.target.value }
+                      })}
+                      placeholder="mark@perfectweddingsbymark.uk"
+                      data-testid="smtp-from-email-input"
+                    />
+                  </div>
+                  <div>
+                    <Label>From Name</Label>
+                    <Input
+                      value={settings?.smtp_settings?.from_name || ""}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, from_name: e.target.value }
+                      })}
+                      placeholder="Weddings By Mark"
+                      data-testid="smtp-from-name-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={settings?.smtp_settings?.use_tls !== false}
+                      onCheckedChange={(checked) => setSettings({
+                        ...settings,
+                        smtp_settings: { ...settings?.smtp_settings, use_tls: checked }
+                      })}
+                      data-testid="smtp-tls-switch"
+                    />
+                    <Label>Use TLS (recommended)</Label>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <Button
+                    onClick={handleSaveSettings}
+                    disabled={saving}
+                    className="bg-obsidian hover:bg-obsidian/90"
+                    data-testid="save-smtp-btn"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? "Saving..." : "Save SMTP Settings"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleTestEmail}
+                    disabled={testingEmail || !settings?.smtp_settings?.host}
+                    data-testid="test-email-btn"
+                  >
+                    <TestTube className="w-4 h-4 mr-2" />
+                    {testingEmail ? "Sending..." : "Send Test Email"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email Templates Card */}
+            <Card className="bg-white border-border/40 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="font-display text-xl">Email Templates</CardTitle>
+                  <p className="text-sm text-muted-foreground">Customize your quote and notification emails</p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setEditingEmailTemplate(null);
+                    setEmailTemplateForm({ name: "", subject: "", body: "" });
+                    setShowEmailTemplateModal(true);
+                  }}
+                  className="bg-gold hover:bg-gold/90"
+                  data-testid="add-email-template-btn"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Template
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {emailTemplates.length > 0 ? (
+                  <div className="space-y-4">
+                    {emailTemplates.map((template, index) => (
+                      <div
+                        key={template.id}
+                        className="flex items-center justify-between p-4 bg-bone rounded-sm"
+                        data-testid={`email-template-item-${index}`}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-medium text-obsidian">{template.name}</h4>
+                            {template.name === "quote_email" && (
+                              <Badge className="bg-gold/10 text-gold border-gold/20">Default Quote</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">Subject: {template.subject}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditEmailTemplate(template)}
+                        >
+                          Edit
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Mail className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground">No email templates yet</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      A default quote template will be created automatically
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-6 p-4 bg-muted/30 rounded-sm">
+                  <h4 className="font-medium text-obsidian mb-2">Available Placeholders</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%client_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%partner1_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%partner2_name%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%wedding_date%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%quote_link%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%phone%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%email%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%deposit_amount%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%sort_code%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%account_number%</code>
+                    <code className="bg-obsidian/10 px-2 py-1 rounded">%account_name%</code>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Main Packages Tab */}
@@ -643,7 +966,206 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Booking Form Tab */}
+        <TabsContent value="bookingform">
+          <Card className="bg-white border-border/40 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="font-display text-xl">Booking Form</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Clients fill this out via their portal after accepting a quote
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  setBookingFieldForm({ label: "", field_type: "text", required: true, placeholder: "" });
+                  setShowBookingFieldModal(true);
+                }}
+                className="bg-gold hover:bg-gold/90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Field
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Intro Text */}
+              <div>
+                <Label>Introduction Text</Label>
+                <Textarea
+                  value={bookingFormTemplate?.intro_text || ""}
+                  onChange={(e) => setBookingFormTemplate({
+                    ...bookingFormTemplate,
+                    intro_text: e.target.value
+                  })}
+                  placeholder="Please fill in the details below..."
+                  rows={3}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleSaveBookingFormIntro}
+                >
+                  <Save className="w-3 h-3 mr-2" />
+                  Save Intro
+                </Button>
+              </div>
+
+              {/* Form Fields */}
+              <div>
+                <h4 className="font-medium text-obsidian mb-3">Form Fields</h4>
+                {bookingFormTemplate?.fields?.length > 0 ? (
+                  <div className="space-y-2">
+                    {bookingFormTemplate.fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="flex items-center justify-between p-3 bg-bone rounded-sm"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-obsidian">{field.label}</span>
+                            {field.required && (
+                              <Badge variant="outline" className="text-xs">Required</Badge>
+                            )}
+                            <Badge className="bg-muted text-muted-foreground text-xs">
+                              {field.field_type}
+                            </Badge>
+                          </div>
+                          {field.placeholder && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Placeholder: {field.placeholder}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteBookingField(field.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm py-4 text-center">
+                    No fields yet. Click "Add Field" to create your booking form.
+                  </p>
+                )}
+              </div>
+
+              {/* Preview */}
+              <div className="border border-border/40 rounded-sm p-4 bg-bone/50">
+                <h4 className="font-medium text-obsidian mb-2">Form Preview</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  This is how clients will see the form in their portal
+                </p>
+                <div className="bg-white p-4 rounded-sm border border-border/40">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {bookingFormTemplate?.intro_text || "Please fill in your details..."}
+                  </p>
+                  {bookingFormTemplate?.fields?.slice(0, 3).map((field) => (
+                    <div key={field.id} className="mb-3">
+                      <Label className="text-sm">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      {field.field_type === "textarea" ? (
+                        <Textarea
+                          placeholder={field.placeholder}
+                          disabled
+                          className="mt-1 bg-muted/50"
+                          rows={2}
+                        />
+                      ) : (
+                        <Input
+                          type={field.field_type}
+                          placeholder={field.placeholder}
+                          disabled
+                          className="mt-1 bg-muted/50"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {bookingFormTemplate?.fields?.length > 3 && (
+                    <p className="text-xs text-muted-foreground">
+                      + {bookingFormTemplate.fields.length - 3} more fields...
+                    </p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Add Booking Form Field Modal */}
+      <Dialog open={showBookingFieldModal} onOpenChange={setShowBookingFieldModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Add Form Field</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Field Label</Label>
+              <Input
+                value={bookingFieldForm.label}
+                onChange={(e) => setBookingFieldForm({ ...bookingFieldForm, label: e.target.value })}
+                placeholder="e.g., Ceremony Start Time"
+              />
+            </div>
+            <div>
+              <Label>Field Type</Label>
+              <Select
+                value={bookingFieldForm.field_type}
+                onValueChange={(value) => setBookingFieldForm({ ...bookingFieldForm, field_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text (single line)</SelectItem>
+                  <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
+                  <SelectItem value="time">Time</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="tel">Phone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Placeholder Text</Label>
+              <Input
+                value={bookingFieldForm.placeholder}
+                onChange={(e) => setBookingFieldForm({ ...bookingFieldForm, placeholder: e.target.value })}
+                placeholder="e.g., Enter time here..."
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={bookingFieldForm.required}
+                onCheckedChange={(checked) => setBookingFieldForm({ ...bookingFieldForm, required: checked })}
+              />
+              <Label>Required field</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBookingFieldModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddBookingField}
+              disabled={!bookingFieldForm.label}
+              className="bg-gold hover:bg-gold/90"
+            >
+              Add Field
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Package/Add-on Modal */}
       <Dialog open={showPackageModal} onOpenChange={setShowPackageModal}>
@@ -770,6 +1292,64 @@ export default function Settings() {
               data-testid="save-contract-template-btn"
             >
               {editingContract ? "Update" : "Create"} Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Template Modal */}
+      <Dialog open={showEmailTemplateModal} onOpenChange={setShowEmailTemplateModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              {editingEmailTemplate ? "Edit Email Template" : "Add Email Template"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Template Name</Label>
+              <Input
+                value={emailTemplateForm.name}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, name: e.target.value })}
+                placeholder="e.g., quote_email"
+                data-testid="email-template-name-input"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Use lowercase with underscores (e.g., quote_email, payment_reminder)</p>
+            </div>
+            <div>
+              <Label>Email Subject</Label>
+              <Input
+                value={emailTemplateForm.subject}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, subject: e.target.value })}
+                placeholder="Your Wedding Photography Quote from Weddings By Mark"
+                data-testid="email-template-subject-input"
+              />
+            </div>
+            <div>
+              <Label>Email Body</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Use placeholders like %client_name%, %quote_link%, %deposit_amount%, etc.
+              </p>
+              <Textarea
+                value={emailTemplateForm.body}
+                onChange={(e) => setEmailTemplateForm({ ...emailTemplateForm, body: e.target.value })}
+                placeholder="Hi %client_name%,&#10;&#10;Thank you for considering..."
+                rows={20}
+                className="font-mono text-sm"
+                data-testid="email-template-body-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmailTemplateModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEmailTemplate}
+              className="bg-obsidian hover:bg-obsidian/90"
+              data-testid="save-email-template-btn"
+            >
+              {editingEmailTemplate ? "Update" : "Create"} Template
             </Button>
           </DialogFooter>
         </DialogContent>

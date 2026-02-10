@@ -39,14 +39,16 @@ export default function ClientPortal() {
 
   useEffect(() => {
     fetchPortalData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchPortalData = async () => {
     try {
       const response = await axios.get(`${API}/portal/${token}`);
       setPortalData(response.data);
-      if (response.data.booking_form) {
-        setBookingForm(response.data.booking_form);
+      // Initialize booking form responses from existing data
+      if (response.data.booking_form_response?.responses) {
+        setBookingForm(response.data.booking_form_response.responses);
       }
     } catch (err) {
       console.error("Error fetching portal:", err);
@@ -59,8 +61,10 @@ export default function ClientPortal() {
   const handleSaveBookingForm = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/booking-forms/${bookingForm.id}`, bookingForm);
-      toast.success("Details saved successfully");
+      await axios.post(`${API}/public/booking-form/${portalData.job.id}/submit`, {
+        responses: bookingForm
+      });
+      toast.success("Booking details saved successfully!");
       fetchPortalData();
     } catch (err) {
       console.error("Error saving booking form:", err);
@@ -150,7 +154,7 @@ export default function ClientPortal() {
     );
   }
 
-  const { business, job, invoice, contract, booking_form } = portalData;
+  const { business, job, invoice, contract, booking_form_template, booking_form_response } = portalData;
 
   return (
     <div className="min-h-screen bg-bone">
@@ -237,14 +241,14 @@ export default function ClientPortal() {
 
                 <Card className="bg-white border-border/40">
                   <CardContent className="p-6 text-center">
-                    {booking_form?.is_completed ? (
+                    {booking_form_response ? (
                       <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                     ) : (
                       <Clock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
                     )}
                     <p className="font-display text-lg text-obsidian">Details</p>
                     <p className="text-sm text-muted-foreground">
-                      {booking_form?.is_completed ? "Completed" : "Please Complete"}
+                      {booking_form_response ? "Completed" : "Please Complete"}
                     </p>
                   </CardContent>
                 </Card>
@@ -476,171 +480,73 @@ export default function ClientPortal() {
             </Card>
           </TabsContent>
 
-          {/* Details Tab */}
+          {/* Details Tab - Dynamic Booking Form */}
           <TabsContent value="details">
             <Card className="bg-white border-border/40">
               <CardHeader>
                 <CardTitle className="font-display text-xl">Wedding Details</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Please fill in your wedding day details so we can plan accordingly
+                  {booking_form_template?.intro_text || "Please fill in your wedding day details so we can plan accordingly"}
                 </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Partner 1 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Partner 1 Name</Label>
-                    <Input
-                      value={bookingForm.partner1_name || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner1_name: e.target.value })}
-                      data-testid="booking-partner1-name"
-                    />
+                {booking_form_template?.fields?.length > 0 ? (
+                  <>
+                    {booking_form_template.fields.map((field) => (
+                      <div key={field.id}>
+                        <Label>
+                          {field.label}
+                          {field.required && <span className="text-red-500 ml-1">*</span>}
+                        </Label>
+                        {field.field_type === "textarea" ? (
+                          <Textarea
+                            value={bookingForm[field.id] || ""}
+                            onChange={(e) => setBookingForm({ 
+                              ...bookingForm, 
+                              [field.id]: e.target.value 
+                            })}
+                            placeholder={field.placeholder}
+                            rows={3}
+                            className="mt-1"
+                          />
+                        ) : (
+                          <Input
+                            type={field.field_type}
+                            value={bookingForm[field.id] || ""}
+                            onChange={(e) => setBookingForm({ 
+                              ...bookingForm, 
+                              [field.id]: e.target.value 
+                            })}
+                            placeholder={field.placeholder}
+                            className="mt-1"
+                          />
+                        )}
+                      </div>
+                    ))}
+                    
+                    <div className="flex items-center gap-4 pt-4 border-t border-border/40">
+                      <Button
+                        onClick={handleSaveBookingForm}
+                        disabled={saving}
+                        className="bg-gold hover:bg-gold/90"
+                        data-testid="save-booking-form-btn"
+                      >
+                        {saving ? "Saving..." : "Save Details"}
+                      </Button>
+                      {booking_form_response && (
+                        <p className="text-sm text-emerald-600 flex items-center gap-1">
+                          <Check className="w-4 h-4" />
+                          Form submitted
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No booking form has been set up yet.</p>
+                    <p className="text-sm text-muted-foreground mt-2">Please contact Mark if you need to provide additional details.</p>
                   </div>
-                  <div>
-                    <Label>Partner 1 Email</Label>
-                    <Input
-                      type="email"
-                      value={bookingForm.partner1_email || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner1_email: e.target.value })}
-                      data-testid="booking-partner1-email"
-                    />
-                  </div>
-                  <div>
-                    <Label>Partner 1 Phone</Label>
-                    <Input
-                      value={bookingForm.partner1_phone || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner1_phone: e.target.value })}
-                      data-testid="booking-partner1-phone"
-                    />
-                  </div>
-                </div>
-
-                {/* Partner 2 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Partner 2 Name</Label>
-                    <Input
-                      value={bookingForm.partner2_name || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner2_name: e.target.value })}
-                      data-testid="booking-partner2-name"
-                    />
-                  </div>
-                  <div>
-                    <Label>Partner 2 Email</Label>
-                    <Input
-                      type="email"
-                      value={bookingForm.partner2_email || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner2_email: e.target.value })}
-                      data-testid="booking-partner2-email"
-                    />
-                  </div>
-                  <div>
-                    <Label>Partner 2 Phone</Label>
-                    <Input
-                      value={bookingForm.partner2_phone || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, partner2_phone: e.target.value })}
-                      data-testid="booking-partner2-phone"
-                    />
-                  </div>
-                </div>
-
-                {/* Wedding Date & Time */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Wedding Date</Label>
-                    <Input
-                      type="date"
-                      value={bookingForm.wedding_date || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, wedding_date: e.target.value })}
-                      data-testid="booking-wedding-date"
-                    />
-                  </div>
-                  <div>
-                    <Label>Ceremony Time</Label>
-                    <Input
-                      type="time"
-                      value={bookingForm.ceremony_time || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, ceremony_time: e.target.value })}
-                      data-testid="booking-ceremony-time"
-                    />
-                  </div>
-                </div>
-
-                {/* Ceremony Venue */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Ceremony Venue</Label>
-                    <Input
-                      value={bookingForm.ceremony_venue || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, ceremony_venue: e.target.value })}
-                      placeholder="Venue name"
-                      data-testid="booking-ceremony-venue"
-                    />
-                  </div>
-                  <div>
-                    <Label>Ceremony Address</Label>
-                    <Input
-                      value={bookingForm.ceremony_address || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, ceremony_address: e.target.value })}
-                      placeholder="Full address"
-                      data-testid="booking-ceremony-address"
-                    />
-                  </div>
-                </div>
-
-                {/* Reception Venue */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Reception Venue</Label>
-                    <Input
-                      value={bookingForm.reception_venue || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, reception_venue: e.target.value })}
-                      placeholder="Venue name (if different)"
-                      data-testid="booking-reception-venue"
-                    />
-                  </div>
-                  <div>
-                    <Label>Reception Address</Label>
-                    <Input
-                      value={bookingForm.reception_address || ""}
-                      onChange={(e) => setBookingForm({ ...bookingForm, reception_address: e.target.value })}
-                      placeholder="Full address"
-                      data-testid="booking-reception-address"
-                    />
-                  </div>
-                </div>
-
-                {/* Getting Ready */}
-                <div>
-                  <Label>Getting Ready Location</Label>
-                  <Input
-                    value={bookingForm.getting_ready_location || ""}
-                    onChange={(e) => setBookingForm({ ...bookingForm, getting_ready_location: e.target.value })}
-                    placeholder="Where will you be getting ready?"
-                    data-testid="booking-getting-ready"
-                  />
-                </div>
-
-                {/* Special Requests */}
-                <div>
-                  <Label>Special Requests / Notes</Label>
-                  <Textarea
-                    value={bookingForm.special_requests || ""}
-                    onChange={(e) => setBookingForm({ ...bookingForm, special_requests: e.target.value })}
-                    placeholder="Any special moments you'd like captured, family situations to be aware of, etc."
-                    rows={4}
-                    data-testid="booking-special-requests"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleSaveBookingForm}
-                  disabled={saving}
-                  className="bg-obsidian hover:bg-obsidian/90"
-                  data-testid="save-booking-form-btn"
-                >
-                  {saving ? "Saving..." : "Save Details"}
-                </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -651,7 +557,7 @@ export default function ClientPortal() {
       <footer className="bg-obsidian text-white py-8 mt-12">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <p className="text-white/60 text-sm">
-            © 2024 {business?.name}. All rights reserved.
+            © {new Date().getFullYear()} {business?.name}. All rights reserved.
           </p>
         </div>
       </footer>

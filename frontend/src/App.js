@@ -12,6 +12,7 @@ import Contracts from "@/pages/Contracts";
 import Settings from "@/pages/Settings";
 import ClientPortal from "@/pages/ClientPortal";
 import EnquiryForm from "@/pages/EnquiryForm";
+import QuoteView from "@/pages/QuoteView";
 
 // Layout
 import DashboardLayout from "@/components/DashboardLayout";
@@ -35,6 +36,7 @@ function App() {
           {/* Public Routes */}
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="/enquiry" element={<EnquiryForm />} />
+          <Route path="/view-quote/:quoteId" element={<QuoteView />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
