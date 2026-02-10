@@ -39,14 +39,16 @@ export default function ClientPortal() {
 
   useEffect(() => {
     fetchPortalData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchPortalData = async () => {
     try {
       const response = await axios.get(`${API}/portal/${token}`);
       setPortalData(response.data);
-      if (response.data.booking_form) {
-        setBookingForm(response.data.booking_form);
+      // Initialize booking form responses from existing data
+      if (response.data.booking_form_response?.responses) {
+        setBookingForm(response.data.booking_form_response.responses);
       }
     } catch (err) {
       console.error("Error fetching portal:", err);
@@ -59,8 +61,10 @@ export default function ClientPortal() {
   const handleSaveBookingForm = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/booking-forms/${bookingForm.id}`, bookingForm);
-      toast.success("Details saved successfully");
+      await axios.post(`${API}/public/booking-form/${portalData.job.id}/submit`, {
+        responses: bookingForm
+      });
+      toast.success("Booking details saved successfully!");
       fetchPortalData();
     } catch (err) {
       console.error("Error saving booking form:", err);
