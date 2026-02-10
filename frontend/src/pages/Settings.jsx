@@ -217,6 +217,43 @@ export default function Settings() {
     }
   };
 
+  const handleAddBookingField = async () => {
+    try {
+      await axios.post(`${API}/booking-form-template/add-field`, bookingFieldForm);
+      toast.success("Field added");
+      setShowBookingFieldModal(false);
+      setBookingFieldForm({ label: "", field_type: "text", required: true, placeholder: "" });
+      fetchData();
+    } catch (error) {
+      console.error("Error adding field:", error);
+      toast.error("Failed to add field");
+    }
+  };
+
+  const handleDeleteBookingField = async (fieldId) => {
+    if (!window.confirm("Delete this field?")) return;
+    try {
+      await axios.delete(`${API}/booking-form-template/field/${fieldId}`);
+      toast.success("Field deleted");
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting field:", error);
+      toast.error("Failed to delete field");
+    }
+  };
+
+  const handleSaveBookingFormIntro = async () => {
+    try {
+      await axios.put(`${API}/booking-form-template`, {
+        intro_text: bookingFormTemplate?.intro_text
+      });
+      toast.success("Intro text saved");
+    } catch (error) {
+      console.error("Error saving intro:", error);
+      toast.error("Failed to save");
+    }
+  };
+
   const handleDeletePackage = async (id) => {
     if (!window.confirm("Are you sure you want to delete this package?")) return;
     try {
