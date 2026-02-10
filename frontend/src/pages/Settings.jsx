@@ -102,6 +102,7 @@ export default function Settings() {
       setPackages(packagesRes.data);
       setContractTemplates(contractsRes.data);
       setEmailTemplates(emailTemplatesRes.data);
+      setBookingFormTemplate(bookingFormRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load settings");
