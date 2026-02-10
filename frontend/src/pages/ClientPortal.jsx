@@ -154,7 +154,7 @@ export default function ClientPortal() {
     );
   }
 
-  const { business, job, invoice, contract, booking_form } = portalData;
+  const { business, job, invoice, contract, booking_form_template, booking_form_response } = portalData;
 
   return (
     <div className="min-h-screen bg-bone">
