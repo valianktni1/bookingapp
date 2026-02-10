@@ -241,14 +241,14 @@ export default function ClientPortal() {
 
                 <Card className="bg-white border-border/40">
                   <CardContent className="p-6 text-center">
-                    {booking_form?.is_completed ? (
+                    {booking_form_response ? (
                       <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
                     ) : (
                       <Clock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
                     )}
                     <p className="font-display text-lg text-obsidian">Details</p>
                     <p className="text-sm text-muted-foreground">
-                      {booking_form?.is_completed ? "Completed" : "Please Complete"}
+                      {booking_form_response ? "Completed" : "Please Complete"}
                     </p>
                   </CardContent>
                 </Card>
