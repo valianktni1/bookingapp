@@ -918,6 +918,58 @@ export default function Settings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Booking Form Tab */}
+        <TabsContent value="bookingform">
+          <Card className="bg-white border-border/40 shadow-sm">
+            <CardHeader>
+              <CardTitle className="font-display text-xl">Booking Form</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                This form is sent to clients after they accept a quote. They fill it out via their portal.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-gold/10 border border-gold/30 rounded-sm p-4">
+                <p className="text-sm text-obsidian">
+                  <strong>Coming Soon:</strong> Customizable booking form with questions like:
+                </p>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  <li>• Ceremony start time</li>
+                  <li>• Bride/Groom getting ready locations</li>
+                  <li>• Key family members to photograph</li>
+                  <li>• Special requests or moments to capture</li>
+                  <li>• Dietary requirements (if meal provided)</li>
+                  <li>• Emergency contact details</li>
+                </ul>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  For now, the client portal shows their invoice and contract. A customizable booking form will be added in a future update.
+                </p>
+              </div>
+              
+              <div className="border border-border/40 rounded-sm p-4">
+                <h4 className="font-medium text-obsidian mb-2">Current Client Portal Includes:</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-gold" />
+                    Invoice with payment details
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-gold" />
+                    Contract with e-signature
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-gold" />
+                    Wedding date & venue info
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-gold" />
+                    Package details & pricing
+                  </li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Package/Add-on Modal */}
