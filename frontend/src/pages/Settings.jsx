@@ -291,6 +291,10 @@ export default function Settings() {
             <FileSignature className="w-4 h-4 mr-2" />
             Contracts
           </TabsTrigger>
+          <TabsTrigger value="bookingform" data-testid="tab-bookingform">
+            <FileText className="w-4 h-4 mr-2" />
+            Booking Form
+          </TabsTrigger>
         </TabsList>
 
         {/* Business Info Tab */}
