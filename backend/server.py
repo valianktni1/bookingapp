@@ -1861,7 +1861,10 @@ async def get_client_portal(portal_token: str):
     settings = await get_settings()
     invoice = await db.invoices.find_one({"id": job.get('invoice_id')}, {"_id": 0}) if job.get('invoice_id') else None
     contract = await db.contracts.find_one({"id": job.get('contract_id')}, {"_id": 0}) if job.get('contract_id') else None
-    booking_form = await db.booking_forms.find_one({"id": job.get('booking_form_id')}, {"_id": 0}) if job.get('booking_form_id') else None
+    
+    # Get booking form template and any existing responses
+    booking_form_template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    booking_form_response = await db.booking_form_responses.find_one({"job_id": job['id']}, {"_id": 0})
     
     return {
         "business": {
@@ -1876,7 +1879,8 @@ async def get_client_portal(portal_token: str):
         "job": Job(**serialize_doc(job)).model_dump() if job else None,
         "invoice": Invoice(**serialize_doc(invoice)).model_dump() if invoice else None,
         "contract": Contract(**serialize_doc(contract)).model_dump() if contract else None,
-        "booking_form": BookingForm(**serialize_doc(booking_form)).model_dump() if booking_form else None
+        "booking_form_template": booking_form_template,
+        "booking_form_response": booking_form_response
     }
 
 # ---------- PUBLIC ENQUIRY FORM ----------
