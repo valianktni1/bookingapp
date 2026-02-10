@@ -904,9 +904,23 @@ async def get_public_quote(quote_id: str):
     
     # Get all active packages for display
     packages = await db.packages.find({"is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    packages_map = {p['id']: p for p in packages}
+    
+    # Enrich quote items with package includes (in case they weren't saved originally)
+    enriched_items = []
+    for item in quote.get('items', []):
+        pkg_id = item.get('package_id')
+        pkg = packages_map.get(pkg_id, {})
+        enriched_item = {
+            **item,
+            'includes': item.get('includes') or pkg.get('includes', [])
+        }
+        enriched_items.append(enriched_item)
+    
+    quote['items'] = enriched_items
     
     return {
-        "quote": Quote(**serialize_doc(quote)).model_dump(),
+        "quote": quote,
         "lead": {
             "partner1_name": lead['partner1_name'],
             "partner2_name": lead['partner2_name'],
