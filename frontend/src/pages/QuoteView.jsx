@@ -88,16 +88,23 @@ export default function QuoteView() {
     
     setAccepting(true);
     try {
-      // Send acceptance to backend - this will create the job and send notification email
-      await axios.post(`${API}/public/quote/${quoteId}/accept`, {
+      // Send acceptance to backend - this will create the job, invoice, contract and send emails
+      const response = await axios.post(`${API}/public/quote/${quoteId}/accept`, {
         selected_packages: selectedPackages
       });
       
-      toast.success("Quote accepted! Mark will be in touch shortly to confirm your booking.");
+      toast.success("Booking confirmed! Check your email for your portal access.");
+      
+      // Redirect to portal after short delay
+      if (response.data.portal_url) {
+        setTimeout(() => {
+          window.location.href = response.data.portal_url;
+        }, 2000);
+      }
     } catch (err) {
       console.error("Error accepting quote:", err);
-      toast.error("Failed to accept quote. Please try again or contact Mark directly.");
-    } finally {
+      const errorMsg = err.response?.data?.detail || "Failed to accept quote. Please try again or contact Mark directly.";
+      toast.error(errorMsg);
       setAccepting(false);
     }
   };
