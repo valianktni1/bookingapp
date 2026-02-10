@@ -902,14 +902,20 @@ async def get_public_quote(quote_id: str):
     }
 
 @api_router.post("/public/quote/{quote_id}/accept")
-async def accept_public_quote(quote_id: str, selected_packages: List[str], contract_template_id: str):
-    """Client accepts quote with selected packages"""
+async def accept_public_quote(quote_id: str, body: dict):
+    """Client accepts quote with selected packages - sends notification to Mark"""
+    selected_packages = body.get('selected_packages', [])
+    
     quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
     
     if quote.get('status') == 'accepted':
         raise HTTPException(status_code=400, detail="Quote has already been accepted")
+    
+    lead = await db.leads.find_one({"id": quote['lead_id']}, {"_id": 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
     
     # Update quote with selected packages
     selected_items = [item for item in quote.get('items', []) if item.get('package_id') in selected_packages]
@@ -932,9 +938,54 @@ async def accept_public_quote(quote_id: str, selected_packages: List[str], contr
         }}
     )
     
-    # Now create the job using the accept-quote endpoint logic
-    # (This reuses the existing job creation flow)
-    return {"message": "Quote accepted! Creating your booking...", "redirect_to_accept": True, "quote_id": quote_id, "contract_template_id": contract_template_id}
+    # Update lead status to booked
+    await db.leads.update_one(
+        {"id": lead['id']},
+        {"$set": {"status": LeadStatus.BOOKED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Send notification email to Mark
+    settings = await get_settings()
+    
+    # Build the selected items list for the email
+    items_list = "\n".join([f"  • {item['name']} - £{item['price'] * item.get('quantity', 1):,.2f}" for item in selected_items])
+    
+    notification_body = f"""🎉 NEW BOOKING ALERT! 🎉
+
+{lead['partner1_name']} & {lead['partner2_name']} have accepted their quote and booked you for their wedding!
+
+Wedding Date: {lead.get('wedding_date', 'TBC')}
+Venue: {lead.get('venue', 'TBC')}
+Email: {lead['email']}
+Phone: {lead.get('phone', 'Not provided')}
+
+Selected Package(s):
+{items_list}
+
+Subtotal: £{new_subtotal:,.2f}
+Discount: -£{quote.get('discount', 0):,.2f}
+Total: £{new_total:,.2f}
+
+Deposit Due: £{settings.deposit_amount:,.2f}
+Balance Due: £{new_total - settings.deposit_amount:,.2f}
+
+---
+Log in to your CRM to create their job, invoice, and contract.
+"""
+    
+    try:
+        await send_email(
+            to_email=settings.email,
+            subject=f"🎉 NEW BOOKING: {lead['partner1_name']} & {lead['partner2_name']}",
+            body=notification_body,
+            settings=settings
+        )
+        logger.info(f"Booking notification sent to {settings.email}")
+    except Exception as e:
+        logger.error(f"Failed to send booking notification: {str(e)}")
+        # Don't fail the whole request if email fails
+    
+    return {"message": "Quote accepted! Mark will be in touch shortly to confirm your booking.", "success": True}
 
 # ---------- CONTRACT TEMPLATES ----------
 @api_router.post("/contract-templates", response_model=ContractTemplate)
