@@ -1202,6 +1202,265 @@ async def update_contract_template(template_id: str, template: ContractTemplateC
     updated = await db.contract_templates.find_one({"id": template_id}, {"_id": 0})
     return ContractTemplate(**serialize_doc(updated))
 
+# ---------- BOOKING FORM TEMPLATES ----------
+@api_router.get("/booking-form-template")
+async def get_booking_form_template():
+    """Get the active booking form template"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        # Create default template with common wedding questions
+        default_fields = [
+            BookingFormField(
+                label="Ceremony Start Time",
+                field_type="time",
+                required=True,
+                placeholder="e.g., 14:00"
+            ),
+            BookingFormField(
+                label="Where will the bride/partner 1 be getting ready?",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Home address or hotel name"
+            ),
+            BookingFormField(
+                label="Where will the groom/partner 2 be getting ready?",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Home address or hotel name"
+            ),
+            BookingFormField(
+                label="Reception Venue (if different from ceremony)",
+                field_type="text",
+                required=False,
+                placeholder="Leave blank if same venue"
+            ),
+            BookingFormField(
+                label="Approximate number of guests",
+                field_type="text",
+                required=True,
+                placeholder="e.g., 80"
+            ),
+            BookingFormField(
+                label="Key family members to photograph (names & relationships)",
+                field_type="textarea",
+                required=True,
+                placeholder="e.g., John Smith (Father of Bride), Mary Smith (Mother of Bride)"
+            ),
+            BookingFormField(
+                label="Any special moments or requests to capture?",
+                field_type="textarea",
+                required=False,
+                placeholder="e.g., Surprise during speeches, first look, specific group shots"
+            ),
+            BookingFormField(
+                label="Will there be confetti? If so, when?",
+                field_type="text",
+                required=False,
+                placeholder="e.g., After ceremony outside church"
+            ),
+            BookingFormField(
+                label="Emergency contact name and number",
+                field_type="text",
+                required=True,
+                placeholder="e.g., Best Man - John - 07xxx"
+            ),
+            BookingFormField(
+                label="Any dietary requirements for the photographer?",
+                field_type="text",
+                required=False,
+                placeholder="e.g., Vegetarian, allergies"
+            ),
+            BookingFormField(
+                label="Anything else I should know?",
+                field_type="textarea",
+                required=False,
+                placeholder="Any other details that might help me prepare"
+            ),
+        ]
+        
+        default_template = BookingFormTemplate(
+            name="Wedding Details Form",
+            fields=default_fields,
+            intro_text="Please fill in the details below to help me prepare for your special day. The more information you can provide, the better I can capture all your precious moments!"
+        )
+        doc = default_template.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        # Convert field objects to dicts
+        doc['fields'] = [f.model_dump() for f in default_fields]
+        await db.booking_form_templates.insert_one(doc)
+        template = doc
+    
+    return template
+
+@api_router.put("/booking-form-template")
+async def update_booking_form_template(template_data: dict):
+    """Update the booking form template"""
+    existing = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if existing:
+        await db.booking_form_templates.update_one(
+            {"id": existing['id']},
+            {"$set": {
+                "name": template_data.get('name', existing['name']),
+                "intro_text": template_data.get('intro_text', existing['intro_text']),
+                "fields": template_data.get('fields', existing['fields'])
+            }}
+        )
+    else:
+        # Create new
+        new_template = {
+            "id": str(uuid.uuid4()),
+            "name": template_data.get('name', 'Wedding Details Form'),
+            "intro_text": template_data.get('intro_text', ''),
+            "fields": template_data.get('fields', []),
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.booking_form_templates.insert_one(new_template)
+    
+    return await get_booking_form_template()
+
+@api_router.post("/booking-form-template/add-field")
+async def add_booking_form_field(field_data: dict):
+    """Add a new field to the booking form"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        await get_booking_form_template()  # Create default
+        template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    
+    new_field = {
+        "id": str(uuid.uuid4()),
+        "label": field_data.get('label', ''),
+        "field_type": field_data.get('field_type', 'text'),
+        "required": field_data.get('required', False),
+        "options": field_data.get('options', []),
+        "placeholder": field_data.get('placeholder', '')
+    }
+    
+    fields = template.get('fields', [])
+    fields.append(new_field)
+    
+    await db.booking_form_templates.update_one(
+        {"id": template['id']},
+        {"$set": {"fields": fields}}
+    )
+    
+    return await get_booking_form_template()
+
+@api_router.delete("/booking-form-template/field/{field_id}")
+async def delete_booking_form_field(field_id: str):
+    """Delete a field from the booking form"""
+    template = await db.booking_form_templates.find_one({"is_active": True}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="No booking form template found")
+    
+    fields = [f for f in template.get('fields', []) if f.get('id') != field_id]
+    
+    await db.booking_form_templates.update_one(
+        {"id": template['id']},
+        {"$set": {"fields": fields}}
+    )
+    
+    return await get_booking_form_template()
+
+# ---------- BOOKING FORM RESPONSES (Client Portal) ----------
+@api_router.get("/public/booking-form/{job_id}")
+async def get_booking_form_for_job(job_id: str):
+    """Get booking form for a specific job (client portal)"""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    template = await get_booking_form_template()
+    
+    # Check if already submitted
+    existing_response = await db.booking_form_responses.find_one({"job_id": job_id}, {"_id": 0})
+    
+    return {
+        "template": template,
+        "existing_response": existing_response,
+        "job": {
+            "partner1_name": job['partner1_name'],
+            "partner2_name": job['partner2_name'],
+            "wedding_date": job.get('wedding_date'),
+            "venue": job.get('venue')
+        }
+    }
+
+@api_router.post("/public/booking-form/{job_id}/submit")
+async def submit_booking_form(job_id: str, responses: dict):
+    """Submit booking form responses"""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    # Check if already submitted
+    existing = await db.booking_form_responses.find_one({"job_id": job_id}, {"_id": 0})
+    
+    if existing:
+        # Update existing
+        await db.booking_form_responses.update_one(
+            {"job_id": job_id},
+            {"$set": {
+                "responses": responses.get('responses', {}),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # Create new
+        form_response = BookingFormResponse(
+            job_id=job_id,
+            responses=responses.get('responses', {})
+        )
+        doc = form_response.model_dump()
+        doc['submitted_at'] = doc['submitted_at'].isoformat()
+        await db.booking_form_responses.insert_one(doc)
+        
+        # Update job to mark form as completed
+        await db.jobs.update_one(
+            {"id": job_id},
+            {"$set": {"booking_form_completed": True}}
+        )
+    
+    # Send notification email to Mark
+    settings = await get_settings()
+    
+    # Build responses summary
+    template = await get_booking_form_template()
+    fields_map = {f['id']: f['label'] for f in template.get('fields', [])}
+    
+    responses_text = "\n".join([
+        f"  • {fields_map.get(k, k)}: {v}" 
+        for k, v in responses.get('responses', {}).items() 
+        if v
+    ])
+    
+    notification_body = f"""📋 BOOKING FORM SUBMITTED
+
+{job['partner1_name']} & {job['partner2_name']} have filled out their booking form!
+
+Wedding Date: {job.get('wedding_date', 'TBC')}
+Venue: {job.get('venue', 'TBC')}
+
+Form Responses:
+{responses_text}
+
+---
+Log in to your CRM to view the full details.
+"""
+    
+    try:
+        await send_email(
+            to_email=settings.email,
+            subject=f"📋 Booking Form: {job['partner1_name']} & {job['partner2_name']}",
+            body=notification_body,
+            settings=settings
+        )
+        logger.info(f"Booking form notification sent to {settings.email}")
+    except Exception as e:
+        logger.error(f"Failed to send booking form notification: {str(e)}")
+    
+    return {"message": "Booking form submitted successfully!", "success": True}
+
 # ---------- JOBS ----------
 @api_router.post("/jobs/accept-quote/{quote_id}")
 async def accept_quote_create_job(quote_id: str, contract_template_id: str):
