@@ -178,6 +178,7 @@ class QuoteItem(BaseModel):
     price: float
     package_type: str
     quantity: int = 1
+    includes: List[str] = []  # What's included in this package
 
 class Quote(BaseModel):
     model_config = ConfigDict(extra="ignore")
