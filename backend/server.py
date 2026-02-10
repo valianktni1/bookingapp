@@ -746,7 +746,8 @@ async def send_quote(quote_data: QuoteSend):
                 description=package['description'],
                 price=package['price'],
                 package_type=package['package_type'],
-                quantity=quantity
+                quantity=quantity,
+                includes=package.get('includes', [])  # Include what's in the package
             ))
             subtotal += item_total
     
