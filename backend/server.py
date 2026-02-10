@@ -930,7 +930,7 @@ async def get_public_quote(quote_id: str):
 
 @api_router.post("/public/quote/{quote_id}/accept")
 async def accept_public_quote(quote_id: str, body: dict):
-    """Client accepts quote with selected packages - sends notification to Mark"""
+    """Client accepts quote - creates job, invoice, contract and sends emails"""
     selected_packages = body.get('selected_packages', [])
     
     quote = await db.quotes.find_one({"id": quote_id}, {"_id": 0})
@@ -944,16 +944,19 @@ async def accept_public_quote(quote_id: str, body: dict):
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     
+    settings = await get_settings()
+    
     # Update quote with selected packages
     selected_items = [item for item in quote.get('items', []) if item.get('package_id') in selected_packages]
     if not selected_items:
         raise HTTPException(status_code=400, detail="Please select at least one package")
     
-    # Calculate new total based on selection
+    # Calculate totals
     new_subtotal = sum(item['price'] * item.get('quantity', 1) for item in selected_items)
-    new_total = new_subtotal - quote.get('discount', 0)
+    discount = quote.get('discount', 0)
+    new_total = new_subtotal - discount
     
-    # Update quote with selection
+    # Update quote status
     await db.quotes.update_one(
         {"id": quote_id},
         {"$set": {
@@ -965,18 +968,121 @@ async def accept_public_quote(quote_id: str, body: dict):
         }}
     )
     
-    # Update lead status to booked
+    # Create package summary for job
+    package_summary = ", ".join([f"{item['name']}" + (f" x{item['quantity']}" if item.get('quantity', 1) > 1 else "") for item in selected_items])
+    
+    # Create the Job
+    job = Job(
+        lead_id=lead['id'],
+        quote_id=quote_id,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        phone=lead.get('phone', ''),
+        wedding_date=lead.get('wedding_date', ''),
+        venue=lead.get('venue'),
+        package_summary=package_summary,
+        package_price=new_total
+    )
+    job_doc = job.model_dump()
+    job_doc['created_at'] = job_doc['created_at'].isoformat()
+    await db.jobs.insert_one(job_doc)
+    
+    # Create Invoice
+    line_items = []
+    for item in selected_items:
+        qty = item.get('quantity', 1)
+        line_items.append(InvoiceLineItem(
+            description=item['name'],
+            quantity=qty,
+            unit_price=item['price'],
+            amount=item['price'] * qty
+        ).model_dump())
+    
+    # Add discount as negative line item if applicable
+    if discount > 0:
+        line_items.append(InvoiceLineItem(
+            description=f"Discount{' - ' + quote.get('discount_note') if quote.get('discount_note') else ''}",
+            quantity=1,
+            unit_price=-discount,
+            amount=-discount
+        ).model_dump())
+    
+    # Calculate dates
+    wedding_date = datetime.strptime(lead.get('wedding_date', datetime.now(timezone.utc).strftime('%Y-%m-%d')), '%Y-%m-%d') if lead.get('wedding_date') else datetime.now(timezone.utc)
+    deposit_due = (datetime.now(timezone.utc) + timedelta(days=settings.deposit_days)).strftime('%Y-%m-%d')
+    balance_due = (wedding_date - timedelta(days=settings.balance_days_before)).strftime('%Y-%m-%d')
+    
+    # Invoice number
+    count = await db.invoices.count_documents({})
+    invoice_number = f"WBM-{datetime.now().year}-{str(count + 1).zfill(4)}"
+    
+    invoice = Invoice(
+        job_id=job.id,
+        invoice_number=invoice_number,
+        partner1_name=lead['partner1_name'],
+        partner2_name=lead['partner2_name'],
+        email=lead['email'],
+        wedding_date=lead.get('wedding_date', ''),
+        line_items=line_items,
+        subtotal=new_subtotal,
+        discount=discount,
+        total_amount=new_total,
+        deposit_amount=settings.deposit_amount,
+        balance_amount=new_total - settings.deposit_amount,
+        deposit_due_date=deposit_due,
+        balance_due_date=balance_due,
+        status="pending",
+        sync_to_accounts=False
+    )
+    invoice_doc = invoice.model_dump()
+    invoice_doc['created_at'] = invoice_doc['created_at'].isoformat()
+    await db.invoices.insert_one(invoice_doc)
+    
+    # Update job with invoice ID
+    await db.jobs.update_one({"id": job.id}, {"$set": {"invoice_id": invoice.id}})
+    
+    # Create Contract from first active template
+    contract_template = await db.contract_templates.find_one({"is_active": True}, {"_id": 0})
+    contract_id = None
+    if contract_template:
+        # Replace placeholders in contract
+        contract_content = contract_template['content']
+        contract_content = contract_content.replace('{{partner1_name}}', lead['partner1_name'])
+        contract_content = contract_content.replace('{{partner2_name}}', lead['partner2_name'])
+        contract_content = contract_content.replace('{{wedding_date}}', lead.get('wedding_date', 'TBC'))
+        contract_content = contract_content.replace('{{package_name}}', package_summary)
+        contract_content = contract_content.replace('{{package_price}}', f"£{new_total:,.2f}")
+        contract_content = contract_content.replace('{{deposit_amount}}', f"£{settings.deposit_amount:,.2f}")
+        contract_content = contract_content.replace('{{balance_amount}}', f"£{new_total - settings.deposit_amount:,.2f}")
+        contract_content = contract_content.replace('{{venue}}', lead.get('venue', 'TBC'))
+        
+        contract_doc = {
+            "id": str(uuid.uuid4()),
+            "job_id": job.id,
+            "template_id": contract_template['id'],
+            "content": contract_content,
+            "status": "pending_signature",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.contracts.insert_one(contract_doc)
+        contract_id = contract_doc['id']
+        await db.jobs.update_one({"id": job.id}, {"$set": {"contract_id": contract_id}})
+    
+    # Update lead status
     await db.leads.update_one(
         {"id": lead['id']},
         {"$set": {"status": LeadStatus.BOOKED.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
     
-    # Send notification email to Mark
-    settings = await get_settings()
+    # Build portal URL
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://booking.perfectweddingsbymark.uk')
+    portal_url = f"{frontend_url}/portal/{job.portal_token}"
     
-    # Build the selected items list for the email
+    # Build items list for emails
     items_list = "\n".join([f"  • {item['name']} - £{item['price'] * item.get('quantity', 1):,.2f}" for item in selected_items])
     
+    # ============ EMAIL TO MARK (Notification) ============
     notification_body = f"""🎉 NEW BOOKING ALERT! 🎉
 
 {lead['partner1_name']} & {lead['partner2_name']} have accepted their quote and booked you for their wedding!
@@ -990,14 +1096,15 @@ Selected Package(s):
 {items_list}
 
 Subtotal: £{new_subtotal:,.2f}
-Discount: -£{quote.get('discount', 0):,.2f}
+Discount: -£{discount:,.2f}
 Total: £{new_total:,.2f}
 
-Deposit Due: £{settings.deposit_amount:,.2f}
-Balance Due: £{new_total - settings.deposit_amount:,.2f}
+Deposit Due: £{settings.deposit_amount:,.2f} by {deposit_due}
+Balance Due: £{new_total - settings.deposit_amount:,.2f} by {balance_due}
 
 ---
-Log in to your CRM to create their job, invoice, and contract.
+Job, Invoice, and Contract have been automatically created.
+Log in to your CRM to view the details.
 """
     
     try:
@@ -1009,10 +1116,67 @@ Log in to your CRM to create their job, invoice, and contract.
         )
         logger.info(f"Booking notification sent to {settings.email}")
     except Exception as e:
-        logger.error(f"Failed to send booking notification: {str(e)}")
-        # Don't fail the whole request if email fails
+        logger.error(f"Failed to send booking notification to Mark: {str(e)}")
     
-    return {"message": "Quote accepted! Mark will be in touch shortly to confirm your booking.", "success": True}
+    # ============ EMAIL TO CLIENT (Booking Confirmation + Portal Link) ============
+    client_body = f"""Dear {lead['partner1_name']} & {lead['partner2_name']},
+
+Thank you so much for booking Weddings By Mark for your wedding photography! I'm absolutely thrilled to be a part of your special day.
+
+Here's a summary of your booking:
+
+Wedding Date: {lead.get('wedding_date', 'TBC')}
+Venue: {lead.get('venue', 'TBC')}
+
+Your Package:
+{items_list}
+
+Total: £{new_total:,.2f}
+
+Payment Schedule:
+  • Deposit: £{settings.deposit_amount:,.2f} - due by {deposit_due}
+  • Balance: £{new_total - settings.deposit_amount:,.2f} - due by {balance_due}
+
+Bank Transfer Details:
+  Sort Code: {settings.bank_details.sort_code}
+  Account Number: {settings.bank_details.account_number}
+  Account Name: {settings.bank_details.account_name}
+  Reference: {lead['partner1_name']} & {lead['partner2_name']}
+
+YOUR CLIENT PORTAL
+
+You can access your personal portal to view your invoice, contract, and fill out your booking form:
+
+{portal_url}
+
+Please sign your contract in the portal to confirm your booking.
+
+If you have any questions at all, please don't hesitate to get in touch. I can't wait to capture your beautiful wedding day!
+
+Best wishes,
+Mark
+{settings.business_name}
+{settings.phone}
+{settings.email}
+"""
+    
+    try:
+        await send_email(
+            to_email=lead['email'],
+            subject=f"Booking Confirmed! Welcome to {settings.business_name} 💍",
+            body=client_body,
+            settings=settings
+        )
+        logger.info(f"Booking confirmation sent to client: {lead['email']}")
+    except Exception as e:
+        logger.error(f"Failed to send booking confirmation to client: {str(e)}")
+    
+    return {
+        "message": "Quote accepted! Check your email for your booking confirmation and portal access.",
+        "success": True,
+        "portal_url": portal_url,
+        "job_id": job.id
+    }
 
 # ---------- CONTRACT TEMPLATES ----------
 @api_router.post("/contract-templates", response_model=ContractTemplate)
