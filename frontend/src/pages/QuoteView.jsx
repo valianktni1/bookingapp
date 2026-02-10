@@ -11,12 +11,13 @@ import {
   Phone,
   Mail,
   Globe,
-  CreditCard
+  CreditCard,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -28,6 +29,7 @@ export default function QuoteView() {
   const [error, setError] = useState(null);
   // IMPORTANT: Start with empty array - client selects their own packages
   const [selectedPackages, setSelectedPackages] = useState([]);
+  const [expandedPackages, setExpandedPackages] = useState({});
   const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
@@ -40,7 +42,6 @@ export default function QuoteView() {
       const response = await axios.get(`${API}/public/quote/${quoteId}`);
       setData(response.data);
       // CRITICAL: Clear any selections - client must choose their own package
-      // Do NOT pre-select anything
       setSelectedPackages([]);
       console.log("Quote loaded - selectedPackages reset to empty array");
     } catch (err) {
@@ -64,10 +65,18 @@ export default function QuoteView() {
     );
   };
 
+  const toggleExpanded = (packageId, e) => {
+    e.stopPropagation();
+    setExpandedPackages(prev => ({
+      ...prev,
+      [packageId]: !prev[packageId]
+    }));
+  };
+
   const calculateTotal = () => {
     if (!data) return 0;
     return data.quote.items
-      .filter(item => selectedPackages.includes(item.package_id))
+      .filter(item => isPackageSelected(item.package_id))
       .reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
   };
 
@@ -79,12 +88,12 @@ export default function QuoteView() {
     
     setAccepting(true);
     try {
-      // For now, just show a success message
-      // In a full implementation, this would create the job
-      toast.success("Quote accepted! Mark will be in touch shortly to confirm your booking.");
+      // Send acceptance to backend - this will create the job and send notification email
+      await axios.post(`${API}/public/quote/${quoteId}/accept`, {
+        selected_packages: selectedPackages
+      });
       
-      // You could redirect to a thank you page or the portal
-      // window.location.href = `/portal/${data.quote.id}`;
+      toast.success("Quote accepted! Mark will be in touch shortly to confirm your booking.");
     } catch (err) {
       console.error("Error accepting quote:", err);
       toast.error("Failed to accept quote. Please try again or contact Mark directly.");
@@ -117,27 +126,41 @@ export default function QuoteView() {
   const { quote, lead, business } = data;
   const total = calculateTotal();
   const discount = quote.discount || 0;
-  const finalTotal = total - discount;
+  const finalTotal = Math.max(0, total - (total > 0 ? discount : 0));
+
+  // Parse includes from string to array if needed
+  const parseIncludes = (item) => {
+    if (item.includes && Array.isArray(item.includes)) {
+      return item.includes;
+    }
+    if (item.includes && typeof item.includes === 'string') {
+      return item.includes.split('\n').filter(i => i.trim());
+    }
+    if (item.description) {
+      return [item.description];
+    }
+    return [];
+  };
 
   return (
     <div className="min-h-screen bg-bone">
       {/* Header */}
       <header className="bg-obsidian text-white py-8">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {business.logo_url && (
-                <img 
-                  src={business.logo_url} 
-                  alt={business.name}
-                  className="h-16 w-auto"
-                />
-              )}
+          <div className="flex items-center justify-center md:justify-start gap-4">
+            {business.logo_url && (
+              <img 
+                src={business.logo_url} 
+                alt={business.name}
+                className="h-20 w-auto"
+              />
+            )}
+            {!business.logo_url && (
               <div>
                 <h1 className="font-display text-2xl">{business.name}</h1>
                 <p className="text-white/70 text-sm">Wedding Photography</p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </header>
@@ -175,8 +198,9 @@ export default function QuoteView() {
         {/* Package Selection Instructions */}
         <div className="bg-gold/10 border border-gold/30 rounded-sm p-4 mb-6">
           <p className="text-obsidian text-sm">
-            <strong>How to book:</strong> Select ONE main package below, add any optional extras you'd like, 
-            then click "Accept Quote & Book" at the bottom. Your booking will be confirmed once the £{data?.business?.deposit_amount || 100} deposit is received.
+            <strong>How to book:</strong> Click on a package to see what's included, then tick the checkbox to select it. 
+            Add any optional extras you'd like, then click "Accept Quote & Book" at the bottom. 
+            Your booking will be confirmed once the £{business?.deposit_amount || 100} deposit is received.
           </p>
         </div>
 
@@ -186,90 +210,189 @@ export default function QuoteView() {
           
           {/* Main Packages */}
           <div className="space-y-4">
-            {quote.items.filter(item => item.package_type === "main").map((item) => (
-              <Card 
-                key={item.package_id}
-                className={`bg-white border-2 transition-all cursor-pointer ${
-                  isPackageSelected(item.package_id) 
-                    ? 'border-gold shadow-md' 
-                    : 'border-border/40 hover:border-gold/50'
-                }`}
-                onClick={() => togglePackage(item.package_id)}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        isPackageSelected(item.package_id)
-                          ? 'bg-gold border-gold'
-                          : 'border-muted-foreground/30'
-                      }`}>
-                        {isPackageSelected(item.package_id) && (
-                          <Check className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Package className="w-4 h-4 text-gold" />
-                          <h4 className="font-display text-lg text-obsidian">{item.name}</h4>
-                          <Badge className="bg-gold/10 text-gold border-gold/20">Main Package</Badge>
+            {quote.items.filter(item => item.package_type === "main").map((item) => {
+              const includes = parseIncludes(item);
+              const isExpanded = expandedPackages[item.package_id];
+              const isSelected = isPackageSelected(item.package_id);
+              
+              return (
+                <Card 
+                  key={item.package_id}
+                  className={`bg-white border-2 transition-all overflow-hidden ${
+                    isSelected 
+                      ? 'border-gold shadow-lg' 
+                      : 'border-border/40 hover:border-gold/50'
+                  }`}
+                >
+                  {/* Package Header - Clickable to expand */}
+                  <div 
+                    className="p-6 cursor-pointer"
+                    onClick={(e) => toggleExpanded(item.package_id, e)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-4">
+                        {/* Checkbox */}
+                        <div 
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-gold border-gold'
+                              : 'border-muted-foreground/30 hover:border-gold'
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePackage(item.package_id);
+                          }}
+                        >
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-white" />
+                          )}
                         </div>
-                        <p className="text-muted-foreground text-sm">{item.description}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <Package className="w-5 h-5 text-gold" />
+                            <h4 className="font-display text-xl text-obsidian">{item.name}</h4>
+                            <Badge className="bg-gold/10 text-gold border-gold/20">Main Package</Badge>
+                          </div>
+                          <p className="text-muted-foreground text-sm mt-1">
+                            Click to see what's included
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-display text-2xl text-obsidian">£{item.price.toLocaleString()}</p>
+                      <div className="text-right flex items-center gap-3">
+                        <p className="font-display text-2xl text-obsidian">£{item.price.toLocaleString()}</p>
+                        <button className="text-muted-foreground hover:text-obsidian transition-colors">
+                          {isExpanded ? <ChevronUp className="w-6 h-6" /> : <ChevronDown className="w-6 h-6" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                  
+                  {/* Expandable Content */}
+                  {isExpanded && (
+                    <div className="px-6 pb-6 border-t border-border/40 pt-4 bg-bone/50">
+                      <h5 className="font-semibold text-obsidian mb-3">What's Included:</h5>
+                      {includes.length > 0 ? (
+                        <ul className="space-y-2">
+                          {includes.map((include, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-muted-foreground">
+                              <Check className="w-4 h-4 text-gold mt-0.5 flex-shrink-0" />
+                              <span>{include}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">{item.description || "Contact for full details"}</p>
+                      )}
+                      
+                      {/* Select button inside accordion */}
+                      <Button
+                        className={`mt-4 ${isSelected ? 'bg-gold hover:bg-gold/90' : 'bg-obsidian hover:bg-obsidian/90'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePackage(item.package_id);
+                        }}
+                      >
+                        {isSelected ? (
+                          <>
+                            <Check className="w-4 h-4 mr-2" />
+                            Selected
+                          </>
+                        ) : (
+                          'Select This Package'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
 
           {/* Add-ons */}
           {quote.items.filter(item => item.package_type === "addon").length > 0 && (
             <>
               <h3 className="font-display text-xl text-obsidian mt-8">Add-ons (Optional)</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {quote.items.filter(item => item.package_type === "addon").map((item) => (
-                  <Card 
-                    key={item.package_id}
-                    className={`bg-white border-2 transition-all cursor-pointer ${
-                      isPackageSelected(item.package_id) 
-                        ? 'border-sage shadow-md' 
-                        : 'border-border/40 hover:border-sage/50'
-                    }`}
-                    onClick={() => togglePackage(item.package_id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            isPackageSelected(item.package_id)
-                              ? 'bg-sage border-sage'
-                              : 'border-muted-foreground/30'
-                          }`}>
-                            {isPackageSelected(item.package_id) && (
-                              <Check className="w-3 h-3 text-white" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <Sparkles className="w-3 h-3 text-sage" />
-                              <h4 className="font-medium text-obsidian">{item.name}</h4>
+              <div className="space-y-3">
+                {quote.items.filter(item => item.package_type === "addon").map((item) => {
+                  const includes = parseIncludes(item);
+                  const isExpanded = expandedPackages[item.package_id];
+                  const isSelected = isPackageSelected(item.package_id);
+                  
+                  return (
+                    <Card 
+                      key={item.package_id}
+                      className={`bg-white border-2 transition-all overflow-hidden ${
+                        isSelected 
+                          ? 'border-sage shadow-md' 
+                          : 'border-border/40 hover:border-sage/50'
+                      }`}
+                    >
+                      {/* Add-on Header */}
+                      <div 
+                        className="p-4 cursor-pointer"
+                        onClick={(e) => toggleExpanded(item.package_id, e)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            {/* Checkbox */}
+                            <div 
+                              className={`w-6 h-6 rounded border-2 flex items-center justify-center cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-sage border-sage'
+                                  : 'border-muted-foreground/30 hover:border-sage'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePackage(item.package_id);
+                              }}
+                            >
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-white" />
+                              )}
                             </div>
-                            {item.quantity > 1 && (
-                              <p className="text-xs text-muted-foreground">x{item.quantity}</p>
-                            )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-sage" />
+                                <h4 className="font-medium text-obsidian">{item.name}</h4>
+                                {item.quantity > 1 && (
+                                  <Badge variant="outline" className="text-xs">x{item.quantity}</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">Click for details</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-display text-lg text-obsidian">
+                              £{(item.price * (item.quantity || 1)).toLocaleString()}
+                            </p>
+                            <button className="text-muted-foreground hover:text-obsidian transition-colors">
+                              {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
                           </div>
                         </div>
-                        <p className="font-display text-lg text-obsidian">
-                          £{(item.price * (item.quantity || 1)).toLocaleString()}
-                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      
+                      {/* Expandable Content */}
+                      {isExpanded && (
+                        <div className="px-4 pb-4 border-t border-border/40 pt-3 bg-bone/50">
+                          <h5 className="font-semibold text-obsidian mb-2 text-sm">What's Included:</h5>
+                          {includes.length > 0 ? (
+                            <ul className="space-y-1">
+                              {includes.map((include, idx) => (
+                                <li key={idx} className="flex items-start gap-2 text-muted-foreground text-sm">
+                                  <Check className="w-3 h-3 text-sage mt-0.5 flex-shrink-0" />
+                                  <span>{include}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-muted-foreground text-sm">{item.description || "Additional service"}</p>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             </>
           )}
