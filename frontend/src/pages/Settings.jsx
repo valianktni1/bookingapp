@@ -970,55 +970,202 @@ export default function Settings() {
         {/* Booking Form Tab */}
         <TabsContent value="bookingform">
           <Card className="bg-white border-border/40 shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-display text-xl">Booking Form</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                This form is sent to clients after they accept a quote. They fill it out via their portal.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-gold/10 border border-gold/30 rounded-sm p-4">
-                <p className="text-sm text-obsidian">
-                  <strong>Coming Soon:</strong> Customizable booking form with questions like:
-                </p>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li>• Ceremony start time</li>
-                  <li>• Bride/Groom getting ready locations</li>
-                  <li>• Key family members to photograph</li>
-                  <li>• Special requests or moments to capture</li>
-                  <li>• Dietary requirements (if meal provided)</li>
-                  <li>• Emergency contact details</li>
-                </ul>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  For now, the client portal shows their invoice and contract. A customizable booking form will be added in a future update.
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="font-display text-xl">Booking Form</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Clients fill this out via their portal after accepting a quote
                 </p>
               </div>
-              
-              <div className="border border-border/40 rounded-sm p-4">
-                <h4 className="font-medium text-obsidian mb-2">Current Client Portal Includes:</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-gold" />
-                    Invoice with payment details
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-gold" />
-                    Contract with e-signature
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-gold" />
-                    Wedding date & venue info
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-gold" />
-                    Package details & pricing
-                  </li>
-                </ul>
+              <Button
+                onClick={() => {
+                  setBookingFieldForm({ label: "", field_type: "text", required: true, placeholder: "" });
+                  setShowBookingFieldModal(true);
+                }}
+                className="bg-gold hover:bg-gold/90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Field
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Intro Text */}
+              <div>
+                <Label>Introduction Text</Label>
+                <Textarea
+                  value={bookingFormTemplate?.intro_text || ""}
+                  onChange={(e) => setBookingFormTemplate({
+                    ...bookingFormTemplate,
+                    intro_text: e.target.value
+                  })}
+                  placeholder="Please fill in the details below..."
+                  rows={3}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleSaveBookingFormIntro}
+                >
+                  <Save className="w-3 h-3 mr-2" />
+                  Save Intro
+                </Button>
+              </div>
+
+              {/* Form Fields */}
+              <div>
+                <h4 className="font-medium text-obsidian mb-3">Form Fields</h4>
+                {bookingFormTemplate?.fields?.length > 0 ? (
+                  <div className="space-y-2">
+                    {bookingFormTemplate.fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="flex items-center justify-between p-3 bg-bone rounded-sm"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-obsidian">{field.label}</span>
+                            {field.required && (
+                              <Badge variant="outline" className="text-xs">Required</Badge>
+                            )}
+                            <Badge className="bg-muted text-muted-foreground text-xs">
+                              {field.field_type}
+                            </Badge>
+                          </div>
+                          {field.placeholder && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Placeholder: {field.placeholder}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteBookingField(field.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm py-4 text-center">
+                    No fields yet. Click "Add Field" to create your booking form.
+                  </p>
+                )}
+              </div>
+
+              {/* Preview */}
+              <div className="border border-border/40 rounded-sm p-4 bg-bone/50">
+                <h4 className="font-medium text-obsidian mb-2">Form Preview</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  This is how clients will see the form in their portal
+                </p>
+                <div className="bg-white p-4 rounded-sm border border-border/40">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {bookingFormTemplate?.intro_text || "Please fill in your details..."}
+                  </p>
+                  {bookingFormTemplate?.fields?.slice(0, 3).map((field) => (
+                    <div key={field.id} className="mb-3">
+                      <Label className="text-sm">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </Label>
+                      {field.field_type === "textarea" ? (
+                        <Textarea
+                          placeholder={field.placeholder}
+                          disabled
+                          className="mt-1 bg-muted/50"
+                          rows={2}
+                        />
+                      ) : (
+                        <Input
+                          type={field.field_type}
+                          placeholder={field.placeholder}
+                          disabled
+                          className="mt-1 bg-muted/50"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {bookingFormTemplate?.fields?.length > 3 && (
+                    <p className="text-xs text-muted-foreground">
+                      + {bookingFormTemplate.fields.length - 3} more fields...
+                    </p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Booking Form Field Modal */}
+      <Dialog open={showBookingFieldModal} onOpenChange={setShowBookingFieldModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Add Form Field</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Field Label</Label>
+              <Input
+                value={bookingFieldForm.label}
+                onChange={(e) => setBookingFieldForm({ ...bookingFieldForm, label: e.target.value })}
+                placeholder="e.g., Ceremony Start Time"
+              />
+            </div>
+            <div>
+              <Label>Field Type</Label>
+              <Select
+                value={bookingFieldForm.field_type}
+                onValueChange={(value) => setBookingFieldForm({ ...bookingFieldForm, field_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="text">Text (single line)</SelectItem>
+                  <SelectItem value="textarea">Text Area (multi-line)</SelectItem>
+                  <SelectItem value="time">Time</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="tel">Phone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Placeholder Text</Label>
+              <Input
+                value={bookingFieldForm.placeholder}
+                onChange={(e) => setBookingFieldForm({ ...bookingFieldForm, placeholder: e.target.value })}
+                placeholder="e.g., Enter time here..."
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={bookingFieldForm.required}
+                onCheckedChange={(checked) => setBookingFieldForm({ ...bookingFieldForm, required: checked })}
+              />
+              <Label>Required field</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBookingFieldModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddBookingField}
+              disabled={!bookingFieldForm.label}
+              className="bg-gold hover:bg-gold/90"
+            >
+              Add Field
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Package/Add-on Modal */}
       <Dialog open={showPackageModal} onOpenChange={setShowPackageModal}>
